@@ -160,6 +160,101 @@ jobs:
 
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+      # ============================================================
+      # 7.5 Patch dockerd: drop legacy iptables dependencies
+      # ============================================================
+      - name: Remove legacy iptables dependencies from dockerd
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAKEFILE="feeds/packages/utils/dockerd/Makefile"
+          if [ ! -f "$MAKEFILE" ]; then
+            echo "ERROR: dockerd Makefile not found: $MAKEFILE"; exit 1
+          fi
+          echo "========== DEPENDS (before) =========="
+          sed -n '/define Package\/dockerd$/,/^endef/p' "$MAKEFILE"
+
+          # 1) 整行删除（覆盖 +IPV6: 条件前缀、iptables 全部变体、续行反斜杠）
+          sed -i -E \
+            -e '/^[[:space:]]*\+(IPV6:)?(iptables|ip6tables|iptables-mod-[a-z0-9-]+|ip6tables-mod-[a-z0-9-]+|kmod-ipt-[a-z0-9-]+)[[:space:]]*\\?[[:space:]]*$/d' \
+            "$MAKEFILE"
+          # 2) 兜底：同一行混排多个依赖时逐个剔除
+          sed -i -E \
+            -e 's/\+(IPV6:)?(iptables|ip6tables|iptables-mod-[a-z0-9-]+|ip6tables-mod-[a-z0-9-]+|kmod-ipt-[a-z0-9-]+)([[:space:]]+|$)/ /g' \
+            "$MAKEFILE"
+
+          echo "========== DEPENDS (after) =========="
+          sed -n '/define Package\/dockerd$/,/^endef/p' "$MAKEFILE"
+
+          # 3) 双向校验：iptables 系依赖清零，必要依赖未被误删
+          if grep -Eq '\+(IPV6:)?(iptables|ip6tables|kmod-ipt-)' "$MAKEFILE"; then
+            echo "ERROR: iptables dependencies still present"; exit 1
+          fi
+          for dep in containerd kmod-veth tini uci-firewall kmod-nf-ipvs; do
+            grep -q "+${dep}" "$MAKEFILE" \
+              || { echo "ERROR: ${dep} was accidentally removed"; exit 1; }
+          done
+          echo "dockerd iptables dependencies removed OK."
+
+      # ============================================================
+      # 7.6 dockerd native nftables-only configuration (files overlay)
+      # ============================================================
+      - name: Generate dockerd nftables-only daemon config
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p files/etc/docker files/etc/uci-defaults
+
+          # dockerd >=29 支持 firewall-backend=nftables（原生 nftables 管理规则）
+          # dockerd <29 不支持该 key（会被拒启），降级为仅 iptables:false + fw4 NAT
+          if grep -Eq '^PKG_VERSION:=29\.' \
+               feeds/packages/utils/dockerd/Makefile; then
+            cat > files/etc/docker/daemon.json <<'EOF'
+          {
+            "iptables": false,
+            "ip6tables": false,
+            "firewall-backend": "nftables"
+          }
+          EOF
+          else
+            cat > files/etc/docker/daemon.json <<'EOF'
+          {
+            "iptables": false,
+            "ip6tables": false
+          }
+          EOF
+          fi
+          cat files/etc/docker/daemon.json
+
+          # init 脚本只认 /tmp/dockerd/daemon.json（由 UCI 生成）。
+          # 设置 alt_config_file 后，init 直接软链我们的文件，
+          # 并跳过 UCI 配置生成与 iptables 规则注入。
+          cat > files/etc/uci-defaults/99-dockerd-nftables <<'EOF'
+          #!/bin/sh
+          [ -f /etc/config/dockerd ] || touch /etc/config/dockerd
+          uci -q get dockerd.globals >/dev/null || uci -q set dockerd.globals=globals
+          uci -q set dockerd.globals.alt_config_file='/etc/docker/daemon.json'
+          uci -q set dockerd.globals.iptables='0'
+          uci -q set dockerd.globals.ip6tables='0'
+          uci -q commit dockerd
+
+          # iptables=false 时 dockerd 不做 NAT，由 fw4 的 docker zone 负责
+          # （预建并开 masq，dockerd init 的 uciadd 检测到已存在不会覆盖）
+          if ! uci -q get firewall.docker >/dev/null; then
+            uci -q add firewall zone >/dev/null
+            uci -q rename firewall.@zone[-1]='docker'
+            uci -q set firewall.docker.name='docker'
+            uci -q set firewall.docker.input='ACCEPT'
+            uci -q set firewall.docker.output='ACCEPT'
+            uci -q set firewall.docker.forward='ACCEPT'
+            uci -q set firewall.docker.masq='1'
+            uci -q add_list firewall.docker.network='docker'
+            uci -q commit firewall
+          fi
+          exit 0
+          EOF
+          chmod +x files/etc/uci-defaults/99-dockerd-nftables
+          echo "daemon.json + uci-defaults generated."
 
       # ============================================================
       # 8. Verify package sources
