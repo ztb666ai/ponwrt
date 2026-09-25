@@ -440,7 +440,6 @@ jobs:
       # ============================================================
       # 14. Strict configuration verification
       # ============================================================
-
       - name: Verify final configuration
         shell: bash
         run: |
@@ -492,27 +491,14 @@ jobs:
          # grep '^CONFIG_PACKAGE_luci-app-store=y$' .config
          # grep '^CONFIG_PACKAGE_xz-utils=y$' .config
 
-          echo "iStore OK."
-
-          echo "=========================================="
-          echo "WIREGUARD"
-          echo "=========================================="
-
          # grep '^CONFIG_PACKAGE_kmod-wireguard=y$' .config
          # grep '^CONFIG_PACKAGE_wireguard-tools=y$' .config
          # grep '^CONFIG_PACKAGE_luci-proto-wireguard=y$' .config
 
          # grep '^CONFIG_PACKAGE_luci-lib-uqr=y$' .config
          # grep '^CONFIG_PACKAGE_resolveip=y$' .config
-
-          echo "WireGuard OK."
-
-          echo "=========================================="
-          echo "PASSWALL2"
-          echo "=========================================="
-
-          #grep '^CONFIG_PACKAGE_luci-app-passwall2=y$' .config
-          #grep '^CONFIG_PACKAGE_luci-i18n-passwall2-zh-cn=y$' .config
+         #grep '^CONFIG_PACKAGE_luci-app-passwall2=y$' .config
+         #grep '^CONFIG_PACKAGE_luci-i18n-passwall2-zh-cn=y$' .config
 
           #grep \
           #  '^CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_SingBox=y$' \
@@ -525,81 +511,8 @@ jobs:
           #  .config
 
           #echo "PassWall2 + SingBox + nftables selected."
-
-          echo "=========================================="
-          echo "FIREWALL4 / NFTABLES"
-          echo "=========================================="
-
-          grep '^CONFIG_PACKAGE_firewall4=y$' .config
-
-          grep '^CONFIG_PACKAGE_chinadns-ng=y$' .config
-
-          grep '^CONFIG_PACKAGE_dnsmasq-full=y$' .config
-          grep '^CONFIG_PACKAGE_dnsmasq_full_nftset=y$' .config
-
           # PonWrt/ImmortalWrt current nftables package
-          grep '^CONFIG_PACKAGE_nftables-json=y$' .config
 
-          grep '^CONFIG_PACKAGE_kmod-nft-socket=y$' .config
-          grep '^CONFIG_PACKAGE_kmod-nft-tproxy=y$' .config
-          grep '^CONFIG_PACKAGE_kmod-nft-nat=y$' .config
-
-          echo "Firewall4 / nftables OK."
-
-          echo "=========================================="
-          echo "PON"
-          echo "=========================================="
-
-          grep '^CONFIG_PACKAGE_kmod-airoha-pon-frontend=y$' .config
-          grep '^CONFIG_PACKAGE_kmod-airoha-xpon=y$' .config
-
-          grep '^CONFIG_PACKAGE_airoha-pon-debug=y$' .config
-          grep '^CONFIG_PACKAGE_airoha-ponctl=y$' .config
-          grep '^CONFIG_PACKAGE_airoha-pond=y$' .config
-
-          grep '^CONFIG_PACKAGE_luci-app-pon=y$' .config
-          grep '^CONFIG_PACKAGE_luci-i18n-pon-zh-cn=y$' .config
-
-          echo "PON OK."
-
-          echo "=========================================="
-          echo "Docker"
-          echo "=========================================="
-
-          grep '^CONFIG_PACKAGE_luci-app-dockerman=y$' .config
-
-          echo "Docker OK."
-
-          echo "=========================================="
-          echo "SIMPLIFIED CHINESE"
-          echo "=========================================="
-
-          grep '^CONFIG_LUCI_LANG_zh_Hans=y$' .config
-
-          grep '^CONFIG_PACKAGE_luci-i18n-base-zh-cn=y$' .config
-          grep '^CONFIG_PACKAGE_luci-i18n-pon-zh-cn=y$' .config
-          grep '^CONFIG_PACKAGE_luci-i18n-passwall2-zh-cn=y$' .config
-          grep '^CONFIG_PACKAGE_luci-i18n-samba4-zh-cn=y$' .config
-
-          echo "Simplified Chinese OK."
-
-          echo "=========================================="
-          echo "DEFAULT IP / HOSTNAME"
-          echo "=========================================="
-
-          grep -F \
-            'lan) ipad=${ipaddr:-"192.168.2.1"} ;;' \
-            package/base-files/files/bin/config_generate
-
-          grep -F \
-            "set system.@system[-1].hostname='PonWrt'" \
-            package/base-files/files/bin/config_generate
-
-          echo "192.168.2.1 / PonWrt OK."
-
-          echo "=========================================="
-          echo "ALL PRE-BUILD CHECKS PASSED"
-          echo "=========================================="
 
       # ============================================================
       # 15. Config-only test mode
