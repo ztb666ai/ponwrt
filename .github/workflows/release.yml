@@ -311,41 +311,8 @@ jobs:
                   'lan) ipad=${ipaddr:-"192.168.1.1"} ;;',
                   'lan) ipad=${ipaddr:-"192.168.2.1"} ;;'
               ),
-#              (
-#                  "set system.@system[-1].hostname='ponwrt'",
-#                  "set system.@system[-1].hostname='ImmortalWrt'"
-#              ),
+
           ]
-
-          for old, new in replacements:
-              count = data.count(old)
-
-              if count != 1:
-                  raise SystemExit(
-                      f"ERROR: expected exactly one occurrence of {old!r}, "
-                      f"found {count}"
-                  )
-
-              data = data.replace(old, new, 1)
-
-          path.write_text(data)
-          PY
-
-          echo "========== Verify network defaults =========="
-
-          grep -F \
-            'lan) ipad=${ipaddr:-"192.168.2.1"} ;;' \
-            package/base-files/files/bin/config_generate
-
-
-          if grep -Fq \
-            'lan) ipad=${ipaddr:-"192.168.1.1"} ;;' \
-            package/base-files/files/bin/config_generate; then
-            echo "ERROR: old LAN IP still exists."
-            exit 1
-          fi
-
-          echo "LAN default = 192.168.2.1"
 
       # ============================================================
       # 12. Custom configuration
