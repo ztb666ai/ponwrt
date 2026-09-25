@@ -347,52 +347,6 @@ jobs:
 
           echo "LAN default = 192.168.2.1"
 
-
-      # ============================================================
-      # 11. Branding
-      # ============================================================
-
-      - name: Set Argon brand to ImmortalWrt
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          header="feeds/luci/themes/luci-theme-argon/ucode/template/themes/argon/header.ut"
-
-          test -f "$header"
-
-          if grep -q '{{ hostname }}' "$header"; then
-            sed -i 's/{{ hostname }}/ImmortalWrt/g' "$header"
-          fi
-
-          grep -q 'ImmortalWrt' "$header"
-
-      - name: Set firmware brand to ImmortalWrt
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          python3 <<'PY'
-          from pathlib import Path
-
-          path = Path("include/version.mk")
-          data = path.read_text()
-
-          old = "VERSION_DIST:=$(if $(VERSION_DIST),$(VERSION_DIST),PonWrt)"
-          new = "VERSION_DIST:=$(if $(VERSION_DIST),$(VERSION_DIST),ImmortalWrt)"
-
-          if old in data:
-              data = data.replace(old, new, 1)
-              path.write_text(data)
-
-          data = path.read_text()
-
-          if new not in data:
-              raise SystemExit("ERROR: VERSION_DIST was not set to ImmortalWrt")
-          PY
-
-          grep 'VERSION_DIST:=' include/version.mk
-
       # ============================================================
       # 12. Custom configuration
       # ============================================================
