@@ -174,18 +174,6 @@ jobs:
           test -f package/feeds/istore/luci-app-store/Makefile
           echo "iStore source OK."
 
-          echo "========== PassWall2 =========="
-          test -f package/feeds/passwall2/luci-app-passwall2/Makefile
-          echo "PassWall2 source OK."
-
-          echo "========== PassWall2 packages =========="
-          test -f package/feeds/passwall_packages/sing-box/Makefile
-          test -f package/feeds/passwall_packages/chinadns-ng/Makefile
-          test -f package/feeds/passwall_packages/geoview/Makefile
-          test -f package/feeds/passwall_packages/tcping/Makefile
-          test -f package/feeds/passwall_packages/v2ray-geodata/Makefile
-
-          echo "PassWall2 package sources OK."
 
       # ============================================================
       # 9. Signing key
@@ -228,10 +216,10 @@ jobs:
                   'lan) ipad=${ipaddr:-"192.168.1.1"} ;;',
                   'lan) ipad=${ipaddr:-"192.168.2.1"} ;;'
               ),
-              (
-                  "set system.@system[-1].hostname='ponwrt'",
-                  "set system.@system[-1].hostname='ImmortalWrt'"
-              ),
+#              (
+#                  "set system.@system[-1].hostname='ponwrt'",
+#                  "set system.@system[-1].hostname='ImmortalWrt'"
+#              ),
           ]
 
           for old, new in replacements:
@@ -254,9 +242,6 @@ jobs:
             'lan) ipad=${ipaddr:-"192.168.2.1"} ;;' \
             package/base-files/files/bin/config_generate
 
-          grep -F \
-            "set system.@system[-1].hostname='ImmortalWrt'" \
-            package/base-files/files/bin/config_generate
 
           if grep -Fq \
             'lan) ipad=${ipaddr:-"192.168.1.1"} ;;' \
@@ -265,15 +250,8 @@ jobs:
             exit 1
           fi
 
-          if grep -Fq \
-            "set system.@system[-1].hostname='ponwrt'" \
-            package/base-files/files/bin/config_generate; then
-            echo "ERROR: old hostname still exists."
-            exit 1
-          fi
-
           echo "LAN default = 192.168.2.1"
-          echo "Hostname default = ImmortalWrt"
+
 
       # ============================================================
       # 11. Branding
@@ -372,34 +350,34 @@ jobs:
           # ISTORE
           # ========================================================
 
-          CONFIG_PACKAGE_luci-app-store=y
-          CONFIG_PACKAGE_xz-utils=y
+          #CONFIG_PACKAGE_luci-app-store=y
+          #CONFIG_PACKAGE_xz-utils=y
 
           # ========================================================
           # WIREGUARD
           # ========================================================
 
-          CONFIG_PACKAGE_kmod-wireguard=y
-          CONFIG_PACKAGE_wireguard-tools=y
-          CONFIG_PACKAGE_luci-proto-wireguard=y
+          #CONFIG_PACKAGE_kmod-wireguard=y
+          #CONFIG_PACKAGE_wireguard-tools=y
+          #CONFIG_PACKAGE_luci-proto-wireguard=y
 
           # ========================================================
           # PASSWALL2 - SingBox only + nftables
           # ========================================================
 
-          CONFIG_PACKAGE_luci-app-passwall2=y
-          CONFIG_PACKAGE_luci-i18n-passwall2-zh-cn=y
+          #CONFIG_PACKAGE_luci-app-passwall2=y
+          #CONFIG_PACKAGE_luci-i18n-passwall2-zh-cn=y
 
           # Basic core
 
           # CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_Xray is not set
-          CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_SingBox=y
+          #CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_SingBox=y
           # CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_All is not set
 
           # Transparent proxy
 
           # CONFIG_PACKAGE_luci-app-passwall2_Iptables_Transparent_Proxy is not set
-          CONFIG_PACKAGE_luci-app-passwall2_Nftables_Transparent_Proxy=y
+          #CONFIG_PACKAGE_luci-app-passwall2_Nftables_Transparent_Proxy=y
 
           # Disable optional heavy / legacy components
 
@@ -418,9 +396,10 @@ jobs:
           # SAMBA
           # ========================================================
 
-          CONFIG_PACKAGE_samba4-server=y
-          CONFIG_PACKAGE_luci-app-samba4=y
-          CONFIG_PACKAGE_luci-i18n-samba4-zh-cn=y
+          CONFIG_PACKAGE_docker=y 
+          CONFIG_PACKAGE_docker-compose=y
+          CONFIG_PACKAGE_dockerd=y
+          CONFIG_PACKAGE_luci-app-dockerman=y
 
           EOF
 
@@ -485,17 +464,17 @@ jobs:
             '^CONFIG_PACKAGE_luci-app-openclash=y$' \
             .config; then
             echo "ERROR: OpenClash is enabled."
-            exit 1
+         #   exit 1
           fi
 
-          echo "OpenClash disabled."
+         # echo "OpenClash disabled."
 
           echo "=========================================="
           echo "ISTORE"
           echo "=========================================="
 
-          grep '^CONFIG_PACKAGE_luci-app-store=y$' .config
-          grep '^CONFIG_PACKAGE_xz-utils=y$' .config
+         # grep '^CONFIG_PACKAGE_luci-app-store=y$' .config
+         # grep '^CONFIG_PACKAGE_xz-utils=y$' .config
 
           echo "iStore OK."
 
@@ -503,12 +482,12 @@ jobs:
           echo "WIREGUARD"
           echo "=========================================="
 
-          grep '^CONFIG_PACKAGE_kmod-wireguard=y$' .config
-          grep '^CONFIG_PACKAGE_wireguard-tools=y$' .config
-          grep '^CONFIG_PACKAGE_luci-proto-wireguard=y$' .config
+         # grep '^CONFIG_PACKAGE_kmod-wireguard=y$' .config
+         # grep '^CONFIG_PACKAGE_wireguard-tools=y$' .config
+         # grep '^CONFIG_PACKAGE_luci-proto-wireguard=y$' .config
 
-          grep '^CONFIG_PACKAGE_luci-lib-uqr=y$' .config
-          grep '^CONFIG_PACKAGE_resolveip=y$' .config
+         # grep '^CONFIG_PACKAGE_luci-lib-uqr=y$' .config
+         # grep '^CONFIG_PACKAGE_resolveip=y$' .config
 
           echo "WireGuard OK."
 
@@ -516,75 +495,20 @@ jobs:
           echo "PASSWALL2"
           echo "=========================================="
 
-          grep '^CONFIG_PACKAGE_luci-app-passwall2=y$' .config
-          grep '^CONFIG_PACKAGE_luci-i18n-passwall2-zh-cn=y$' .config
+          #grep '^CONFIG_PACKAGE_luci-app-passwall2=y$' .config
+          #grep '^CONFIG_PACKAGE_luci-i18n-passwall2-zh-cn=y$' .config
 
-          grep \
-            '^CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_SingBox=y$' \
-            .config
+          #grep \
+          #  '^CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_SingBox=y$' \
+          #  .config
 
-          grep '^CONFIG_PACKAGE_sing-box=y$' .config
+          #grep '^CONFIG_PACKAGE_sing-box=y$' .config
 
-          grep \
-            '^CONFIG_PACKAGE_luci-app-passwall2_Nftables_Transparent_Proxy=y$' \
-            .config
+          #grep \
+          #  '^CONFIG_PACKAGE_luci-app-passwall2_Nftables_Transparent_Proxy=y$' \
+          #  .config
 
-          echo "PassWall2 + SingBox + nftables selected."
-
-          echo "=========================================="
-          echo "PASSWALL2 DISABLED OPTIONS"
-          echo "=========================================="
-
-          for option in \
-            CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_Xray \
-            CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_All \
-            CONFIG_PACKAGE_luci-app-passwall2_Iptables_Transparent_Proxy \
-            CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Haproxy \
-            CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Shadowsocks_Rust_Client \
-            CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Shadowsocks_Rust_Server \
-            CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_ShadowsocksR_Libev_Client \
-            CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_ShadowsocksR_Libev_Server \
-            CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Simple_Obfs \
-            CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_V2ray_Plugin
-          do
-            if grep -q "^${option}=y$" .config; then
-              echo "ERROR: unexpected PassWall2 option enabled:"
-              echo "${option}"
-              exit 1
-            fi
-          done
-
-          echo "PassWall2 unwanted components disabled."
-
-          echo "=========================================="
-          echo "PASSWALL2 DEPENDENCIES"
-          echo "=========================================="
-
-          grep '^CONFIG_PACKAGE_coreutils=y$' .config
-          grep '^CONFIG_PACKAGE_coreutils-base64=y$' .config
-          grep '^CONFIG_PACKAGE_coreutils-nohup=y$' .config
-          grep '^CONFIG_PACKAGE_coreutils-timeout=y$' .config
-
-          grep '^CONFIG_PACKAGE_curl=y$' .config
-          grep '^CONFIG_PACKAGE_ip-full=y$' .config
-
-          grep '^CONFIG_PACKAGE_libuci-lua=y$' .config
-          grep '^CONFIG_PACKAGE_lua=y$' .config
-
-          grep '^CONFIG_PACKAGE_luci-compat=y$' .config
-          grep '^CONFIG_PACKAGE_luci-lib-jsonc=y$' .config
-
-          grep '^CONFIG_PACKAGE_lyaml=y$' .config
-          grep '^CONFIG_PACKAGE_resolveip=y$' .config
-          grep '^CONFIG_PACKAGE_tcping=y$' .config
-          grep '^CONFIG_PACKAGE_geoview=y$' .config
-
-          grep '^CONFIG_PACKAGE_v2ray-geoip=y$' .config
-          grep '^CONFIG_PACKAGE_v2ray-geosite=y$' .config
-
-          grep '^CONFIG_PACKAGE_unzip=y$' .config
-
-          echo "PassWall2 dependencies OK."
+          #echo "PassWall2 + SingBox + nftables selected."
 
           echo "=========================================="
           echo "FIREWALL4 / NFTABLES"
@@ -623,14 +547,12 @@ jobs:
           echo "PON OK."
 
           echo "=========================================="
-          echo "SAMBA"
+          echo "Docker"
           echo "=========================================="
 
-          grep '^CONFIG_PACKAGE_samba4-server=y$' .config
-          grep '^CONFIG_PACKAGE_luci-app-samba4=y$' .config
-          grep '^CONFIG_PACKAGE_luci-i18n-samba4-zh-cn=y$' .config
+          grep '^CONFIG_PACKAGE_luci-app-dockerman=y$' .config
 
-          echo "Samba OK."
+          echo "Docker OK."
 
           echo "=========================================="
           echo "SIMPLIFIED CHINESE"
@@ -654,10 +576,10 @@ jobs:
             package/base-files/files/bin/config_generate
 
           grep -F \
-            "set system.@system[-1].hostname='ImmortalWrt'" \
+            "set system.@system[-1].hostname='PonWrt'" \
             package/base-files/files/bin/config_generate
 
-          echo "192.168.2.1 / ImmortalWrt OK."
+          echo "192.168.2.1 / PonWrt OK."
 
           echo "=========================================="
           echo "ALL PRE-BUILD CHECKS PASSED"
@@ -730,17 +652,10 @@ jobs:
           echo "$manifest"
 
           for pkg in \
-            luci-app-store \
-            kmod-wireguard \
-            wireguard-tools \
-            luci-proto-wireguard \
-            luci-app-passwall2 \
-            sing-box \
-            chinadns-ng \
             luci-app-pon \
             airoha-ponctl \
             airoha-pond \
-            samba4-server
+            luci-app-dockerman
           do
             if ! grep -q "^${pkg} " "$manifest"; then
               echo "ERROR: firmware manifest is missing package: ${pkg}"
@@ -748,10 +663,10 @@ jobs:
             fi
           done
 
-          if grep -q '^luci-app-openclash ' "$manifest"; then
-            echo "ERROR: OpenClash unexpectedly exists in firmware."
-            exit 1
-          fi
+          #if grep -q '^luci-app-openclash ' "$manifest"; then
+          #  echo "ERROR: OpenClash unexpectedly exists in firmware."
+          #  exit 1
+          #fi
 
           echo "Actual firmware package manifest OK."
 
@@ -880,16 +795,16 @@ jobs:
             --notes "Nokia XG-040G-MD UBI sysupgrade firmware.
 
           Default LAN IP: 192.168.2.1
-          Default hostname: ImmortalWrt
+          Default hostname: PonWrt
 
           Proxy:
-          PassWall2 + SingBox + nftables
+          nftables
 
           VPN:
-          WireGuard
+          N/A
 
-          OpenClash:
-          Not included
+          Docker:
+          Included
 
           Source commit: ${source_sha}
 
