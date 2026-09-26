@@ -521,8 +521,10 @@ jobs:
 
           # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_znxt_zn504xg-d is not set
           # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_znxt_zn515xg-d is not set
-
           # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_quantum_q1000k-ubi is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-ct-usb-sfp is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-cu-usb-sfp is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi-usb-sfp is not set
 
           CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi=y
 
