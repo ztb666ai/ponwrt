@@ -822,6 +822,30 @@ jobs:
 
           cp -v "$firmware" release/
 
+          # ---- 2) manifest ----
+          mapfile -t manifests < <(
+            find "$target_dir" \
+              -maxdepth 1 \
+              -type f \
+              -name '*.manifest' \
+              -print
+          )
+          if [ "${#manifests[@]}" -ne 1 ]; then
+              echo "ERROR: expected exactly one manifest."
+              echo "Found ${#manifests[@]}."
+          fi
+          cp -v "${manifests[0]}" release/
+
+          # ---- 3) final .config (post defconfig + whitelist) ----
+          if [ ! -s .config ]; then
+            echo "ERROR: .config not found."
+          #  exit 1
+           fi
+           cp -v .config release/xg040gmd.config
+
+           echo "========== release/ =========="
+           ls -lh release/
+
       # ============================================================
       # 20. Final firmware validation
       # ============================================================
@@ -856,77 +880,83 @@ jobs:
           sha256sum "$firmware"
 
       # ============================================================
-      # 21. Publish raw ITB to GitHub Release
+      # 21. Publish ITB + manifest + config to GitHub Release
       # ============================================================
-
-      - name: Publish raw ITB to GitHub Release
+      - name: Publish artifacts to GitHub Release
         if: ${{ !inputs.config_only }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          mapfile -t firmware_files < <(
+          mapfile -t release_files < <(
             find release \
               -maxdepth 1 \
               -type f \
-              -name '*sysupgrade.itb' \
-              -print
+              \( -name '*sysupgrade.itb' \
+              -o -name '*.manifest' \
+              -o -name '*.config' \) \
+              -print | sort
           )
-
-          if [ "${#firmware_files[@]}" -ne 1 ]; then
-            echo "ERROR: expected exactly one firmware."
-            exit 1
+          if [ "${#release_files[@]}" -ne 3 ]; then
+             echo "ERROR: expected exactly 3 artifacts (itb + manifest + config)."
+             echo "Found ${#release_files[@]}:"
+             printf '%s\n' "${release_files[@]}"
+             exit 1
           fi
 
-          firmware="${firmware_files[0]}"
+          for f in "${release_files[@]}"; do
+            test -s "$f" || { echo "ERROR: $f is empty"; exit 1; }
+          done
+
+          firmware="$(find release -maxdepth 1 -type f -name '*sysupgrade.itb')"
+          manifest="$(find release -maxdepth 1 -type f -name '*.manifest')"
+          config="release/xg040gmd.config"
 
           source_sha="$(git rev-parse HEAD)"
           short_sha="$(git rev-parse --short=8 HEAD)"
-
           release_tag="xg040gmd-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}-${short_sha}"
 
-          firmware_sha256="$(
-            sha256sum "$firmware" | awk '{print $1}'
-          )"
+          firmware_sha256="$(sha256sum "$firmware" | awk '{print $1}')"
+          manifest_sha256="$(sha256sum "$manifest" | awk '{print $1}')"
+          config_sha256="$(sha256sum "$config" | awk '{print $1}')"
 
           echo "========== Release =========="
           echo "Tag: ${release_tag}"
           echo "Source: ${source_sha}"
-          echo "Firmware: ${firmware}"
-          echo "SHA256: ${firmware_sha256}"
+          for f in "${release_files[@]}"; do
+            echo "Asset: ${f}"
+          done
 
           gh release create \
-            "${release_tag}" \
-            "${firmware}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --target "${source_sha}" \
-            --title "Nokia XG-040G-MD ${short_sha}" \
-            --notes "Nokia XG-040G-MD UBI sysupgrade firmware.
+             "${release_tag}" \
+             "${firmware}" \
+             "${manifest}" \
+             "${config}" \
+             --repo "${GITHUB_REPOSITORY}" \
+             --target "${source_sha}" \
+             --title "Nokia XG-040G-MD ${short_sha}" \
+             --notes "Nokia XG-040G-MD UBI sysupgrade firmware.
 
           Default LAN IP: 192.168.2.1
           Default hostname: PonWrt
-
-          Proxy:
-          nftables
-
-          VPN:
-          N/A
-
-          Docker:
-          Included
-
-          Source commit: ${source_sha}
+          Timezone: Asia/Shanghai (UTC+8)
+          Proxy: nftables
+          Docker: Included
 
           SHA256:
-          ${firmware_sha256}" \
+          \`\`\`
+          ${firmware_sha256}  $(basename "$firmware")
+          ${manifest_sha256}  $(basename "$manifest")
+          ${config_sha256}  $(basename "$config")
+          \`\`\`
+
+          Source commit: ${source_sha}" \
             --prerelease
 
       # ============================================================
       # 22. Verify published Release
       # ============================================================
-
       - name: Verify published Release
         if: ${{ !inputs.config_only }}
         shell: bash
@@ -934,43 +964,36 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
           short_sha="$(git rev-parse --short=8 HEAD)"
           release_tag="xg040gmd-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}-${short_sha}"
-
-          asset_count="$(
-            gh release view \
-              "${release_tag}" \
+          mapfile -t assets < <(
+            gh release view "${release_tag}" \
               --repo "${GITHUB_REPOSITORY}" \
               --json assets \
-              --jq '.assets | length'
-          )"
+              --jq '.assets[].name'
+          )
 
-          if [ "${asset_count}" -ne 1 ]; then
-            echo "ERROR: Release must contain exactly one uploaded asset."
-            echo "Found: ${asset_count}"
+          echo "========== Assets =========="
+          printf '%s\n' "${assets[@]}"
+           if [ "${#assets[@]}" -ne 3 ]; then
+            echo "ERROR: Release must contain exactly 3 assets."
+            echo "Found: ${#assets[@]}"
             exit 1
           fi
 
-          asset_name="$(
-            gh release view \
-              "${release_tag}" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --json assets \
-              --jq '.assets[0].name'
-          )"
-
-          case "${asset_name}" in
-            *sysupgrade.itb)
-              ;;
-            *)
-              echo "ERROR: Release asset is not sysupgrade.itb."
-              echo "Asset: ${asset_name}"
-              exit 1
-              ;;
-          esac
-
+          has_itb=0; has_manifest=0; has_config=0
+          for name in "${assets[@]}"; do
+            case "${name}" in
+              *sysupgrade.itb) has_itb=1 ;;
+              *.manifest)      has_manifest=1 ;;
+              *.config)        has_config=1 ;;
+              *) echo "ERROR: unexpected asset: ${name}"; exit 1 ;;
+            esac
+          done
+          [ "$has_itb" -eq 1 ]      || { echo "ERROR: missing itb"; exit 1; }
+          [ "$has_manifest" -eq 1 ] || { echo "ERROR: missing manifest"; exit 1; }
+          [ "$has_config" -eq 1 ]   || { echo "ERROR: missing config"; exit 1; }
           echo "=========================================="
           echo "BUILD SUCCESS"
-          echo "Raw firmware: ${asset_name}"
+          echo "Assets: itb + manifest + config"
           echo "=========================================="
