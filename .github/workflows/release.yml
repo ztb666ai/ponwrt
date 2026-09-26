@@ -630,7 +630,6 @@ jobs:
       # ============================================================
       # 14. Whitelist device， make only specified device
       # ============================================================
-      
       - name: Whitelist device (${{ env.TARGET_DEVICE }})
         env:
           DEVICE: ${{ env.TARGET_DEVICE }}
