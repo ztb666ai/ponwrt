@@ -132,7 +132,7 @@ jobs:
           src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git;main
           src-git istore https://github.com/linkease/istore;main
           EOF
-#          cat /tmp/feeds.original >> feeds.conf.default
+          cat /tmp/feeds.original >> feeds.conf.default
 #          echo "========== Feed order =========="
 #          head -n 10 feeds.conf.default
 #        test "$(sed -n '1p' feeds.conf.default)" = \
