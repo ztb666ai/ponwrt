@@ -132,22 +132,17 @@ jobs:
           src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git;main
           src-git istore https://github.com/linkease/istore;main
           EOF
-
-          cat /tmp/feeds.original >> feeds.conf.default
-
-          echo "========== Feed order =========="
-          head -n 10 feeds.conf.default
-
-          test "$(sed -n '1p' feeds.conf.default)" = \
-            "src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main"
-
-          test "$(sed -n '2p' feeds.conf.default)" = \
-            "src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git;main"
-
-          test "$(sed -n '3p' feeds.conf.default)" = \
-            "src-git istore https://github.com/linkease/istore;main"
-
-          echo "Feed priority OK."
+#          cat /tmp/feeds.original >> feeds.conf.default
+#          echo "========== Feed order =========="
+#          head -n 10 feeds.conf.default
+#        test "$(sed -n '1p' feeds.conf.default)" = \
+#            "src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main"
+#         # test "$(sed -n '2p' feeds.conf.default)" = \
+#            "src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git;main"
+#         # test "$(sed -n '3p' feeds.conf.default)" = \
+#            "src-git istore https://github.com/linkease/istore;main"
+#
+#          echo "Feed priority OK."
 
       # ============================================================
       # 7. Update/install feeds
@@ -213,14 +208,16 @@ jobs:
           {
             "iptables": false,
             "ip6tables": false,
-            "firewall-backend": "nftables"
+            "firewall-backend": "nftables",
+            "data-root": "/opt/docker"
           }
           EOF
           else
             cat > files/etc/docker/daemon.json <<'EOF'
           {
             "iptables": false,
-            "ip6tables": false
+            "ip6tables": false,
+            "data-root": "/opt/docker"
           }
           EOF
           fi
@@ -409,13 +406,24 @@ jobs:
           # CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_V2ray_Plugin is not set
 
           # ========================================================
-          # SAMBA
+          # add-on apps
           # ========================================================
 
           CONFIG_PACKAGE_docker=y 
           CONFIG_PACKAGE_docker-compose=y
           CONFIG_PACKAGE_dockerd=y
           CONFIG_PACKAGE_luci-app-dockerman=y
+          CONFIG_PACKAGE_luci-app-iptv=y
+          CONFIG_PACKAGE_udpxy=y
+          CONFIG_PACKAGE_acme-acmesh-dnsapi=y
+          CONFIG_PACKAGE_luci-app-acme=y
+          CONFIG_PACKAGE_luci-ssl-openssl=y
+          CONFIG_PACKAGE_luci-app-ddns-go=y
+          CONFIG_PACKAGE_luci-app-uhttpd=y
+          CONFIG_PACKAGE_msmtp=y
+          CONFIG_PACKAGE_msmtp-mta=y
+          CONFIG_PACKAGE_mutt=y
+          CONFIG_PACKAGE_vim-fuller=y
 
           EOF
 
