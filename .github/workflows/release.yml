@@ -517,6 +517,26 @@ jobs:
           grep -n "CST-8" package/base-files/files/bin/config_generate
           grep -n "Asia/Shanghai" package/base-files/files/bin/config_generate
           grep -n "192.168.2.1" package/base-files/files/bin/config_generate
+      # ============================================================
+      # 10.5 Force China timezone overlay (UTC+8)
+      # ============================================================
+      - name: Generate China timezone uci-defaults overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p files/etc/uci-defaults
+          cat > files/etc/uci-defaults/99-timezone-cn <<'EOF'
+            #!/bin/sh
+            # Force China timezone (UTC+8) on every flash / keep-settings upgrade
+            [ -s /etc/config/system ] || exit 0
+            uci -q set system.@system[0].zonename='Asia/Shanghai'
+            uci -q set system.@system[0].timezone='CST-8'
+            uci -q commit system
+            exit 0
+          EOF
+          chmod +x files/etc/uci-defaults/99-timezone-cn
+          echo "========== 99-timezone-cn =========="
+          cat files/etc/uci-defaults/99-timezone-cn
 
       # ============================================================
       # 12. Custom configuration
@@ -555,6 +575,10 @@ jobs:
           # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi-usb-sfp is not set
 
           CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi=y
+          # ========================================================
+          # TIMEZONE - zoneinfo database (Asia/Shanghai for LuCI/apps)
+          # ========================================================
+          CONFIG_PACKAGE_zoneinfo-asia=y
 
           # ========================================================
           # OPENCLASH DISABLED
