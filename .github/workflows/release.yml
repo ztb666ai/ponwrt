@@ -254,6 +254,185 @@ jobs:
           echo "daemon.json + uci-defaults generated."
 
       # ============================================================
+      # 7.7 USB auto-mount to /opt (Docker data-root)
+      # ============================================================
+      - name: Generate USB auto-mount overlay (/opt)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p files/usr/bin files/etc/hotplug.d/block files/etc/uci-defaults
+
+          # ---- 1) 挂载/卸载辅助脚本 ----
+          cat > files/usr/bin/mount-opt <<'EOF'
+          #!/bin/sh
+          # 将第一个未挂载的 USB/SD 分区挂载到 /opt
+          MOUNT_POINT="/opt"
+
+          do_mount() {
+            local dev
+            mkdir -p "$MOUNT_POINT"
+            # /opt 已被占用则不重复挂
+            grep -qs " ${MOUNT_POINT} " /proc/mounts && return 0
+            for dev in /dev/sd[a-z][0-9]* /dev/mmcblk[0-9]p[0-9]*; do
+              [ -b "$dev" ] || continue
+              grep -qs "^${dev} " /proc/mounts && continue
+              logger -t mount-opt "mounting ${dev} -> ${MOUNT_POINT}"
+              mount -o rw,noatime "$dev" "$MOUNT_POINT" && return 0
+            done
+            return 1
+          }
+
+          do_umount() {
+            local dev="${1}"
+            grep -qs "^${dev} ${MOUNT_POINT} " /proc/mounts && umount "$MOUNT_POINT"
+          }
+
+          case "$1" in
+            mount)  do_mount ;;
+            umount) do_umount "$2" ;;
+            *) echo "usage: $0 mount|umount [dev]" ;;
+          esac
+          EOF
+          chmod +x files/usr/bin/mount-opt
+
+          # ---- 2) hotplug: 开机冷插拔 + 运行期热插拔 ----
+          cat > files/etc/hotplug.d/block/40-mount-opt <<'EOF'
+          case "$ACTION" in
+            add)
+              case "$DEVNAME" in
+                sd[a-z][0-9]*|mmcblk[0-9]p[0-9]*)
+                  # 后台执行避免阻塞 hotplug 队列; 等 1s 让设备节点就绪
+                  ( sleep 1; /usr/bin/mount-opt mount ) &
+                  ;;
+              esac
+              ;;
+            remove)
+              case "$DEVNAME" in
+                sd[a-z][0-9]*|mmcblk[0-9]p[0-9]*)
+                  /usr/bin/mount-opt umount "/dev/$DEVNAME"
+                  ;;
+              esac
+              ;;
+          esac
+          EOF
+
+          # ---- 3) 首次开机: 禁用 blockd, 并提前完成挂载 ----
+          cat > files/etc/uci-defaults/99-mount-opt <<'EOF'
+          # blockd 会把 U 盘自动挂到 /mnt/sda1, 与 /opt 冲突, 禁用之
+          [ -x /etc/init.d/blockd ] && /etc/init.d/blockd disable
+
+          mkdir -p /opt
+
+          # S10 时 kmodloader 已加载 usb-storage, 稍等设备枚举后挂载
+          (
+            n=0
+            while [ "$n" -lt 10 ] && ! /usr/bin/mount-opt mount; do
+              sleep 1
+              n=$((n+1))
+            done
+          ) &
+
+          exit 0
+          EOF
+          chmod +x files/etc/uci-defaults/99-mount-opt
+
+          echo "USB auto-mount overlay generated."
+
+      # ============================================================
+      # 7.8 (可选) dockerd 启动前等待 /opt 挂载
+      # ============================================================
+      - name: Make dockerd wait for /opt mount
+        shell: bash
+        run: |
+          set -euo pipefail
+          INIT="feeds/packages/utils/dockerd/files/dockerd.init"
+          test -f "$INIT"
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("feeds/packages/utils/dockerd/files/dockerd.init")
+          s = p.read_text()
+          wait = """start_service() {
+          \t# wait for /opt (USB auto-mount), max 15s; skip if no USB disk
+          \tlocal n=0
+          \twhile [ "$n" -lt 15 ]; do
+          \t\tgrep -qs " /opt " /proc/mounts && break
+          \t\tls /dev/sd*[0-9] >/dev/null 2>&1 || break
+          \t\tsleep 1
+          \t\tn=$((n+1))
+          \tdone
+          """
+          if "wait for /opt" not in s:
+              assert "start_service() {" in s, "anchor not found, upstream changed!"
+              s = s.replace("start_service() {", wait, 1)
+              p.write_text(s)
+          PY
+          grep -n "wait for /opt" "$INIT"
+
+      # ============================================================
+      # 7.9 /etc/sysctl.conf overlay
+      # ============================================================
+      - name: Generate /etc/sysctl.conf
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p files/etc
+          cat > files/etc/sysctl.conf <<'EOF'
+          # User defined entries should be added to this file not to /etc/sysctl.d/* as
+          # that directory is not backed-up by default and will not survive a reimage
+          # ===========================================
+          # XD-040-MD (2GB RAM) + OpenClash
+          # 场景：无Zram / 游戏UDP保活 / 2.5G有线回程
+          # ===========================================
+          #### 1. 内存管理 (无 Zram 安全策略) ####
+          vm.swappiness = 0
+          vm.min_free_kbytes = 131072
+          vm.overcommit_memory = 0
+          vm.dirty_background_ratio = 5
+          vm.dirty_ratio = 10
+          vm.dirty_expire_centisecs = 3000
+          vm.dirty_writeback_centisecs = 500
+          #### 2. 网络核心缓冲区 (2.5G 吞吐优化) ####
+          net.core.rmem_max = 33554432
+          net.core.wmem_max = 33554432
+          net.core.rmem_default = 262144
+          net.core.wmem_default = 262144
+          net.core.netdev_max_backlog = 10000
+          net.core.netdev_budget = 600
+          net.core.somaxconn = 4096
+          #### 3. 游戏 UDP 保活优化 (关键项) ####
+          net.netfilter.nf_conntrack_udp_timeout = 90
+          net.netfilter.nf_conntrack_udp_timeout_stream = 180
+          #### 4. TCP 协议栈优化 ####
+          net.ipv4.tcp_fastopen = 3
+          net.ipv4.tcp_tw_reuse = 1
+          net.ipv4.tcp_fin_timeout = 30
+          net.ipv4.tcp_keepalive_time = 600
+          net.ipv4.tcp_keepalive_intvl = 30
+          net.ipv4.tcp_keepalive_probes = 3
+          net.ipv4.tcp_mem = 786432 1048576 1572864
+          #### 5. 连接追踪表 (NF Conntrack) ####
+          net.netfilter.nf_conntrack_max = 262144
+          net.netfilter.nf_conntrack_tcp_timeout_established = 1200
+          net.netfilter.nf_conntrack_tcp_timeout_time_wait = 30
+          net.netfilter.nf_conntrack_tcp_timeout_close_wait = 60
+          net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 60
+          #### 6. 端口与 ARP ####
+          net.ipv4.ip_local_port_range = 1024 65535
+          net.ipv4.neigh.default.gc_thresh1 = 1024
+          net.ipv4.neigh.default.gc_thresh2 = 4096
+          net.ipv4.neigh.default.gc_thresh3 = 8192
+          #### 7. 文件句柄 ####
+          fs.file-max = 262144
+          # IPTV: 局端只认 IGMPv2
+          net.ipv4.conf.all.force_igmp_version=2
+          net.ipv4.conf.default.force_igmp_version=2
+          # IPTV: 组播源地址无路由，关闭反向路径校验
+          net.ipv4.conf.all.rp_filter=0
+          net.ipv4.conf.default.rp_filter=0
+          EOF
+          cat files/etc/sysctl.conf
+      
+      # ============================================================
       # 8. Verify package sources
       # ============================================================
 
