@@ -625,11 +625,8 @@ jobs:
             configs/release.config \
             /tmp/xg040gmd.config \
             > .config
-
           make defconfig
-      # ============================================================
-      # 14. Whitelist device， make only specified device
-      # ============================================================
+
       - name: Whitelist device (${{ env.TARGET_DEVICE }})
         env:
           DEVICE: ${{ env.TARGET_DEVICE }}
