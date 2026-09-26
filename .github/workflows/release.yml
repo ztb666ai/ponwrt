@@ -468,29 +468,55 @@ jobs:
               -pubout \
               -out public-key.pem
           fi
-
       # ============================================================
-      # 10. Default LAN IP + hostname
+      # 10. Default LAN IP + hostname + timezone (UTC+8)
       # ============================================================
-
-      - name: Set default LAN IP and hostname
+      - name: Set default LAN IP, hostname and timezone
         shell: bash
         run: |
           set -euo pipefail
-
           python3 <<'PY'
+          import re
           from pathlib import Path
 
           path = Path("package/base-files/files/bin/config_generate")
-          data = path.read_text()
+          s = path.read_text()
 
-          replacements = [
-              (
-                  'lan) ipad=${ipaddr:-"192.168.1.1"} ;;',
-                  'lan) ipad=${ipaddr:-"192.168.2.1"} ;;'
-              ),
+          def must_replace(pattern, repl, label):
+                global s
+                s2, n = re.subn(pattern, repl, s, count=1)
+                if n != 1:
+                    raise SystemExit(f"ERROR: config_generate patch failed: {label}")
+                s = s2
 
-          ]
+          must_replace(
+                r'lan\) ipad=\$\{ipaddr:-"192\.168\.1\.1"\} ;;',
+                'lan) ipad=${ipaddr:-"192.168.2.1"} ;;',
+                "lan ip",
+            )
+          must_replace(
+                r"(set system\.@system\[-1\]\.hostname=)'[^']*'",
+                r"\g<1>'PonWrt'",
+                "hostname",
+            )
+          must_replace(
+                r"(set system\.@system\[-1\]\.timezone=)'[^']*'",
+                r"\g<1>'CST-8'",
+                "timezone",
+            )
+          must_replace(
+                r"(set system\.@system\[-1\]\.zonename=)'[^']*'",
+                r"\g<1>'Asia/Shanghai'",
+                "zonename",
+            )
+
+          path.write_text(s)
+          print("config_generate patched OK")
+          PY
+          grep -n "PonWrt" package/base-files/files/bin/config_generate
+          grep -n "CST-8" package/base-files/files/bin/config_generate
+          grep -n "Asia/Shanghai" package/base-files/files/bin/config_generate
+          grep -n "192.168.2.1" package/base-files/files/bin/config_generate
 
       # ============================================================
       # 12. Custom configuration
