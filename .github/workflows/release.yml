@@ -629,7 +629,22 @@ jobs:
       # ============================================================
       # 14. Whitelist device， compile specified device
       # ============================================================
-
+      - name: Whitelist device (${{ env.TARGET_DEVICE }})
+        env:
+          DEVICE: ${{ env.TARGET_DEVICE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "$DEVICE" ] || { echo "ERROR: TARGET_DEVICE is empty"; exit 1; }
+          DEV_ESC=$(printf '%s' "$DEVICE" | sed -e 's/[^A-Za-z0-9_-]/\\&/g')
+          sed -i -E 's/^(CONFIG_TARGET_[A-Za-z0-9_]+_DEVICE_[A-Za-z0-9_.-]+)=y$/# \1 is not set/' .config
+          grep -qE "^# CONFIG_TARGET_[A-Za-z0-9_]+_DEVICE_${DEV_ESC} is not set$" .config || { echo "ERROR: device symbol for ${DEVICE} not found in .config"; exit 1; }
+          sed -i -E "s/^# (CONFIG_TARGET_[A-Za-z0-9_]+_DEVICE_${DEV_ESC}) is not set$/\1=y/" .config
+          make defconfig
+          remaining=$(grep -cE '^CONFIG_TARGET_[A-Za-z0-9_]+_DEVICE_[A-Za-z0-9_.-]+=y$' .config || true)
+          [ "$remaining" -eq 1 ] || { echo "ERROR: expect exactly 1 DEVICE=y, got ${remaining}"; exit 1; }
+          grep -E "^CONFIG_TARGET_[A-Za-z0-9_]+_DEVICE_${DEV_ESC}=y$" .config
+          echo "Whitelist OK: only ${DEVICE} enabled."
       
       # ============================================================
       # 15. Config-only test mode
