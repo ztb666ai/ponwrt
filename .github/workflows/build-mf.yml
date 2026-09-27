@@ -551,7 +551,7 @@ jobs:
             luci-app-pon \
             airoha-ponctl \
             airoha-pond \
-            luci-app-dockerman
+            luci-app-iptv 
           do
             if ! grep -q "^${pkg} " "$manifest"; then
               echo "ERROR: firmware manifest is missing package: ${pkg}"
@@ -626,7 +626,7 @@ jobs:
             echo "ERROR: .config not found."
           #  exit 1
            fi
-           cp -v .config release/xg040gmd.config
+           cp -v .config release/xg040gmf.config
 
            echo "========== release/ =========="
            ls -lh release/
@@ -727,7 +727,7 @@ jobs:
           Default hostname: PonWrt
           Timezone: Asia/Shanghai (UTC+8)
           Proxy: nftables
-          Docker: Included
+          Docker: N/A
 
           SHA256:
           \`\`\`
