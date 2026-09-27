@@ -448,6 +448,7 @@ jobs:
           CONFIG_PACKAGE_msmtp-mta=y
           CONFIG_PACKAGE_mutt=y
           CONFIG_PACKAGE_vim-fuller=y
+          CONFIG_PACKAGE_luci-app-cloudflared=y
 
           EOF
 
