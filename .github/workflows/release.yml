@@ -666,6 +666,8 @@ jobs:
           CONFIG_PACKAGE_mutt=y
           CONFIG_PACKAGE_vim-fuller=y
           CONFIG_PACKAGE_luci-app-cloudflared=y
+          # APK 仓库基址改为 NJU 镜像（distfeeds.list 的 %U 占位符来源）
+          CONFIG_VERSION_REPO="https://mirror.nju.edu.cn/immortalwrt/snapshots"
 
           EOF
 
