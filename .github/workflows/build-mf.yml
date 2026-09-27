@@ -351,37 +351,15 @@ jobs:
       # 12. Custom configuration
       # ============================================================
 
-      - name: Create XG-040G-MD custom config
+      - name: Create XG-040G-MF custom config
         run: |
-          cat > /tmp/xg040gmd.config <<'EOF'
+          cat > /tmp/xg040gmf.config <<'EOF'
 
           # ========================================================
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_airoha_an7581-evb is not set
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_airoha_an7581-evb-emmc-eagle is not set
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_airoha_an7581-evb-emmc-kite is not set
-
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_gemtek_w1700k-ubi is not set
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_gemtek_xg2010g is not set
-
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_valyrian is not set
-
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5382a is not set
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-ct is not set
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-cu is not set
-
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-tf-ubi is not set
-
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_unionman_ung00a is not set
-
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_znxt_zn504xg-d is not set
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_znxt_zn515xg-d is not set
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_quantum_q1000k-ubi is not set
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-ct-usb-sfp is not set
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-cu-usb-sfp is not set
-          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi-usb-sfp is not set
-          #CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi=y
-
+          #CONFIG_TARGET_DEVICE_airoha_an7583_DEVICE_nokia_xg-040g-mf=y
+          #CONFIG_TARGET_DEVICE_PACKAGES_airoha_an7583_DEVICE_nokia_xg-040g-mf=""
           CONFIG_TARGET_DEVICE_airoha_an7583_DEVICE_nokia_xg-040g-mf-ubi=y
+          CONFIG_TARGET_DEVICE_PACKAGES_airoha_an7583_DEVICE_nokia_xg-040g-mf-ubi=""
           # ========================================================
           # TIMEZONE - zoneinfo database (Asia/Shanghai for LuCI/apps)
           # ========================================================
@@ -471,7 +449,7 @@ jobs:
       # 13. Merge configuration
       # ============================================================
 
-      - name: Configure XG-040G-MD
+      - name: Configure XG-040G-MF
         shell: bash
         run: |
           set -euo pipefail
@@ -480,7 +458,7 @@ jobs:
             configs/an7583.config \
             + \
             configs/release.config \
-            /tmp/xg040gmd.config \
+            /tmp/xg040gmf.config \
             > .config
           make defconfig
       # ============================================================
