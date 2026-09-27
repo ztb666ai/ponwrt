@@ -354,38 +354,38 @@ jobs:
       # 导致 U 盘开机约 30 秒后断电掉线。这里补 always-on。
       # 幂等：已打过补丁则跳过。
       # ============================================================
-      - name: Patch MF DTS - keep usb-5v regulator always-on
-        shell: bash
-        run: |
-          set -euo pipefail
-          DTS_FILE=$(grep -rl 'usb-5v' \
-            target/linux/airoha/files*/arch/arm64/boot/dts/airoha/ \
-            2>/dev/null | head -n1 || true)
-          if [ -z "$DTS_FILE" ]; then
-            echo "ERROR: MF DTS containing 'usb-5v' not found"
-            grep -rn 'usb-5v' target/linux/airoha/ | head -20
-            exit 1
-          fi
-          echo "Patching: ${DTS_FILE}"
-          grep -q 'usb-5v' "$DTS_FILE"
-          python3 - "$DTS_FILE" <<'PY'
-          import re, sys
-          p = sys.argv[1]
-          s = open(p).read()
-          # 定位引用 usb-5v 字符串的 regulator-fixed 节点块
-          pat = re.compile(r'(\w+:\s*regulator-[a-z0-9-]+\s*\{[^{}]*?usb-5v[^{}]*?)(\})', re.S)
-          m = pat.search(s)
-          if not m:
-              raise SystemExit("ERROR: usb-5v regulator node not found in DTS")
-          block = m.group(1)
-          if 'regulator-always-on' in block:
-              print("already patched, skip")
-          else:
-              s = s[:m.start()] + block + '\n\t\tregulator-always-on;\n\t\tregulator-boot-on;\n' + m.group(2) + s[m.end():]
-              open(p, 'w').write(s)
-              print("patched: regulator-always-on/boot-on added to usb-5v")
-          PY
-          grep -n -A8 'usb-5v' "$DTS_FILE" | head -20
+      #- name: Patch MF DTS - keep usb-5v regulator always-on
+      #  shell: bash
+      #  run: |
+      #    set -euo pipefail
+      #    DTS_FILE=$(grep -rl 'usb-5v' \
+      #      target/linux/airoha/files*/arch/arm64/boot/dts/airoha/ \
+      #      2>/dev/null | head -n1 || true)
+      #    if [ -z "$DTS_FILE" ]; then
+      #      echo "ERROR: MF DTS containing 'usb-5v' not found"
+      #      grep -rn 'usb-5v' target/linux/airoha/ | head -20
+      #      exit 1
+      #    fi
+      #    echo "Patching: ${DTS_FILE}"
+      #    grep -q 'usb-5v' "$DTS_FILE"
+      #    python3 - "$DTS_FILE" <<'PY'
+      #    import re, sys
+      #    p = sys.argv[1]
+      #    s = open(p).read()
+      #    # 定位引用 usb-5v 字符串的 regulator-fixed 节点块
+      #    pat = re.compile(r'(\w+:\s*regulator-[a-z0-9-]+\s*\{[^{}]*?usb-5v[^{}]*?)(\})', re.S)
+      #    m = pat.search(s)
+      #    if not m:
+      #        raise SystemExit("ERROR: usb-5v regulator node not found in DTS")
+      #    block = m.group(1)
+      #    if 'regulator-always-on' in block:
+      #        print("already patched, skip")
+      #    else:
+      #        s = s[:m.start()] + block + '\n\t\tregulator-always-on;\n\t\tregulator-boot-on;\n' + m.group(2) + s[m.end():]
+      #        open(p, 'w').write(s)
+      #        print("patched: regulator-always-on/boot-on added to usb-5v")
+      #    PY
+      #    grep -n -A8 'usb-5v' "$DTS_FILE" | head -20
 
       # ============================================================
       # 12. Custom configuration
