@@ -386,6 +386,59 @@ jobs:
       #        print("patched: regulator-always-on/boot-on added to usb-5v")
       #    PY
       #    grep -n -A8 'usb-5v' "$DTS_FILE" | head -20
+    
+      # ============================================================
+      # 10.7 Runtime kernel patches（不改 git 源，构建时动态打补丁）
+      #  P1: LWN crypto 动态软件回退 + EIP93（4 个内核补丁，Linux 6.18）
+      #  P2: OpenWrt c46bef18 桥接 flow 软转发修复（pending-6.18 单文件）
+      # 两者都在内核 prepare 阶段由 quilt 自动应用，无需 commit。
+      # 幂等：已存在/已应用则跳过。
+      # ============================================================
+      - name: Apply kernel patches (EIP93 fallback + bridge flow fix)
+        shell: bash
+        run: |
+          set -euo pipefail
+          KV=$(sed -n 's/^KERNEL_PATCHVER:=//p' target/linux/airoha/Makefile)
+          echo "KERNEL_PATCHVER = ${KV}"
+          [ "${KV}" = "6.18" ] || { echo "ERROR: 两个补丁都基于 Linux 6.18，当前树是 ${KV}"; exit 1; }
+
+          # ---------- P1: LWN 系列（lore linux-crypto 线程 mbox，顺序有保证） ----------
+          AIRD=target/linux/airoha/patches-${KV}
+          if ! compgen -G "${AIRD}/999-*-crypto-dynamic-fallback*.patch" >/dev/null; then
+            mkdir -p "${AIRD}" /tmp/lwn && rm -f /tmp/lwn/*
+            curl -fsSL --retry 3 \
+              'https://lore.kernel.org/linux-crypto/cover.1785226804.git.hurryman2212@gmail.com/t.mbox.gz' \
+              | gzip -dc > /tmp/lwn/series.mbox
+            git mailsplit -o/tmp/lwn /tmp/lwn/series.mbox >/dev/null
+            n=0
+            for f in /tmp/lwn/0*; do
+              [ "$(basename "$f")" = "0001" ] && continue      # 跳过 cover letter
+              n=$((n+1))
+              cp -v "$f" "${AIRD}/999-$(printf '%02d' $n)-crypto-dynamic-fallback.patch"
+            done
+            [ "${n}" -eq 4 ] || { echo "ERROR: 期望 4 个补丁，实际 ${n} 个"; exit 1; }
+          fi
+          ls -l "${AIRD}"/999-*.patch
+          head -n4 "${AIRD}"/999-01-*.patch                    # 日志确认 Subject
+
+          # ---------- P2: OpenWrt master commit（固定 sha，可复现） ----------
+          P2=target/linux/generic/pending-${KV}/675-15-netfilter-fix-bridge-flow-software-forwarding.patch
+          if ! grep -rqs 'netfilter: make bridge flow offload preserve L2 forwarding' \
+                target/linux/generic/pending-${KV}/ ; then     # 查重：上游已收编则跳过
+            mkdir -p "$(dirname "${P2}")"
+            curl -fsSL --retry 3 \
+              'https://raw.githubusercontent.com/openwrt/openwrt/c46bef18699833af759b6b7f71879ed8c23852c1/target/linux/generic/pending-6.18/675-15-netfilter-fix-bridge-flow-software-forwarding.patch' \
+              -o "${P2}"
+          fi
+          head -n6 "${P2}"
+
+          # ---------- 可选：内核侧使能 fallback 框架 ----------
+          CFG=target/linux/airoha/config-${KV}
+          grep -qs '^CONFIG_CRYPTO_DYNAMIC_FALLBACK=y' "${CFG}" || {
+            echo 'CONFIG_CRYPTO_DYNAMIC_FALLBACK=y' >> "${CFG}"
+            echo "appended CONFIG_CRYPTO_DYNAMIC_FALLBACK=y"
+          }
+          echo "Kernel patches prepared."
 
       # ============================================================
       # 12. Custom configuration
