@@ -553,24 +553,33 @@ jobs:
           echo "KERNEL_PATCHVER = ${KV}"
           [ "${KV}" = "6.18" ] || { echo "ERROR: 两个补丁都基于 Linux 6.18，当前树是 ${KV}"; exit 1; }
 
-          # ---------- P1: LWN 系列（lore linux-crypto 线程 mbox，顺序有保证） ----------
+          # ---------- P1: LWN 系列 ----------
+          # t.mbox.gz 是整个线程（含回复），不能按 0001=cover 硬切。
+          # b4 am 只输出真正的补丁邮件（剔除 cover/Re:/ACK），自动取最新版本，顺序正确。
           AIRD=target/linux/airoha/patches-${KV}
           if ! compgen -G "${AIRD}/999-*-crypto-dynamic-fallback*.patch" >/dev/null; then
-            mkdir -p "${AIRD}" /tmp/lwn && rm -f /tmp/lwn/*
-            curl -fsSL --retry 3 \
-              'https://lore.kernel.org/linux-crypto/cover.1785226804.git.hurryman2212@gmail.com/t.mbox.gz' \
-              | gzip -dc > /tmp/lwn/series.mbox
-            git mailsplit -o/tmp/lwn /tmp/lwn/series.mbox >/dev/null
+            sudo apt-get install -y -qq b4
+            rm -rf /tmp/lwn && mkdir -p "${AIRD}" /tmp/lwn
+
+            b4 am -T -o /tmp/lwn -n series \
+              'https://lore.kernel.org/linux-crypto/cover.1785226804.git.hurryman2212@gmail.com/'
+
+            mbx=$(find /tmp/lwn -maxdepth 1 -type f -name '*.mbx' -print -quit)
+            [ -n "$mbx" ] || { echo "ERROR: b4 未产出补丁 mbox"; exit 1; }
+            echo "b4 mbox: ${mbx}"
+
+            rm -rf /tmp/lwn/msg
+            git mailsplit -o/tmp/lwn/msg "$mbx" >/dev/null
+
             n=0
-            for f in /tmp/lwn/0*; do
-              [ "$(basename "$f")" = "0001" ] && continue      # 跳过 cover letter
+            for f in /tmp/lwn/msg/0*; do
               n=$((n+1))
               cp -v "$f" "${AIRD}/999-$(printf '%02d' $n)-crypto-dynamic-fallback.patch"
             done
             [ "${n}" -eq 4 ] || { echo "ERROR: 期望 4 个补丁，实际 ${n} 个"; exit 1; }
           fi
           ls -l "${AIRD}"/999-*.patch
-          head -n4 "${AIRD}"/999-01-*.patch                    # 日志确认 Subject
+          head -n4 "${AIRD}"/999-01-*.patch        # 日志确认 Subject
 
           # ---------- P2: OpenWrt master commit（固定 sha，可复现） ----------
           P2=target/linux/generic/pending-${KV}/675-15-netfilter-fix-bridge-flow-software-forwarding.patch
