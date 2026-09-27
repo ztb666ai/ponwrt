@@ -691,6 +691,9 @@ jobs:
           CONFIG_PACKAGE_kmod-nls-utf8=y
           CONFIG_PACKAGE_kmod-phy-maxlinear=y
           CONFIG_PACKAGE_kmod-phy-realtek=y
+          # 让 usb-power(regulator-output) 节点有驱动认领，防止 usb-5v 被
+          # regulator late-cleanup 关闭（与 MD 行为完全一致）
+          CONFIG_PACKAGE_kmod-regulator-userspace-consumer=y
           # APK 仓库基址改为 NJU 镜像（distfeeds.list 的 %U 占位符来源）
           CONFIG_VERSION_REPO="https://mirror.nju.edu.cn/immortalwrt/snapshots"
 
