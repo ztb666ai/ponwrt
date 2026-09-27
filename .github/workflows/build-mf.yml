@@ -110,9 +110,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dl
-          key: ponwrt-xg040gmd-${{ hashFiles('feeds.conf.default', 'configs/an7583.config', 'configs/release.config') }}
+          key: ponwrt-xg040gmf-${{ hashFiles('feeds.conf.default', 'configs/an7583.config', 'configs/release.config') }}
           restore-keys: |
-            ponwrt-xg040gmd-
+            ponwrt-xg040gmf-
 
       # ============================================================
       # 6. Third-party feeds
