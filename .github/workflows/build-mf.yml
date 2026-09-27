@@ -433,10 +433,6 @@ jobs:
           # add-on apps
           # ========================================================
 
-          #CONFIG_PACKAGE_docker=y 
-          #CONFIG_PACKAGE_docker-compose=y
-          #CONFIG_PACKAGE_dockerd=y
-          #CONFIG_PACKAGE_luci-app-dockerman=y
           CONFIG_PACKAGE_luci-app-iptv=y
           CONFIG_PACKAGE_udpxy=y
           CONFIG_PACKAGE_acme-acmesh-dnsapi=y
