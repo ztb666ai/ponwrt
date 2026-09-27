@@ -383,14 +383,20 @@ jobs:
 
           #CONFIG_PACKAGE_luci-app-store=y
           #CONFIG_PACKAGE_xz-utils=y
-
+   
           # ========================================================
-          # WIREGUARD
+          # WIREGUARD DISABLED (override release.config)
           # ========================================================
+          # CONFIG_PACKAGE_kmod-wireguard is not set
+          # CONFIG_PACKAGE_wireguard-tools is not set
+          # CONFIG_PACKAGE_luci-proto-wireguard is not set
+          
+          # ========================================================
+          # UPNP DISABLED (override release.config)
+          # ========================================================
+          # CONFIG_PACKAGE_luci-app-upnp is not set
+          # CONFIG_PACKAGE_miniupnpd is not set
 
-          #CONFIG_PACKAGE_kmod-wireguard=y
-          #CONFIG_PACKAGE_wireguard-tools=y
-          #CONFIG_PACKAGE_luci-proto-wireguard=y
 
           # ========================================================
           # PASSWALL2 - SingBox only + nftables
