@@ -511,6 +511,8 @@ jobs:
           CONFIG_PACKAGE_kmod-nls-utf8=y
           CONFIG_PACKAGE_kmod-phy-maxlinear=y
           CONFIG_PACKAGE_kmod-phy-realtek=y
+          # APK 仓库基址改为 NJU 镜像（distfeeds.list 的 %U 占位符来源）
+          CONFIG_VERSION_REPO="https://mirror.nju.edu.cn/immortalwrt/snapshots"
 
           EOF
 
