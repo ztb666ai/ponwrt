@@ -418,6 +418,7 @@ jobs:
             echo "b4 mbox: ${mbx}"
 
             rm -rf /tmp/lwn/msg
+            mkdir -p /tmp/lwn/msg # git mailsplit 不会自动创建输出目录，必须先 mkdir
             git mailsplit -o/tmp/lwn/msg "$mbx" >/dev/null
 
             n=0
