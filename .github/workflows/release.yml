@@ -583,15 +583,15 @@ jobs:
           head -n4 "${AIRD}"/999-01-*.patch        # 日志确认 Subject
 
           # ---------- P2: OpenWrt master commit（固定 sha，可复现） ----------
-          P2=target/linux/generic/pending-${KV}/675-15-netfilter-fix-bridge-flow-software-forwarding.patch
-          if ! grep -rqs 'netfilter: make bridge flow offload preserve L2 forwarding' \
-                target/linux/generic/pending-${KV}/ ; then     # 查重：上游已收编则跳过
-            mkdir -p "$(dirname "${P2}")"
-            curl -fsSL --retry 3 \
-              'https://raw.githubusercontent.com/openwrt/openwrt/c46bef18699833af759b6b7f71879ed8c23852c1/target/linux/generic/pending-6.18/675-15-netfilter-fix-bridge-flow-software-forwarding.patch' \
-              -o "${P2}"
-          fi
-          head -n6 "${P2}"
+          #P2=target/linux/generic/pending-${KV}/675-15-netfilter-fix-bridge-flow-software-forwarding.patch
+          #if ! grep -rqs 'netfilter: make bridge flow offload preserve L2 forwarding' \
+          #      target/linux/generic/pending-${KV}/ ; then     # 查重：上游已收编则跳过
+          #  mkdir -p "$(dirname "${P2}")"
+          #  curl -fsSL --retry 3 \
+          #    'https://raw.githubusercontent.com/openwrt/openwrt/c46bef18699833af759b6b7f71879ed8c23852c1/target/linux/generic/pending-6.18/675-15-netfilter-fix-bridge-flow-software-forwarding.patch' \
+          #    -o "${P2}"
+          #fi
+          #head -n6 "${P2}"
 
           # ---------- 可选：内核侧使能 fallback 框架 ----------
           CFG=target/linux/airoha/config-${KV}
