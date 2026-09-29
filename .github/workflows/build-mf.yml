@@ -605,6 +605,8 @@ jobs:
         run: |
           set -euo pipefail
 
+          # change the default theme:
+          sed -i 's/+luci-theme-bootstrap/+luci-theme-argon/g; s/default Bootstrap theme/Argon theme/g' feeds/luci/collections/luci-light/Makefile
           ./scripts/kconfig.pl + \
             configs/an7583.config \
             + \
