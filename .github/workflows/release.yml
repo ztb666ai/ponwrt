@@ -211,7 +211,14 @@ jobs:
             "iptables": false,
             "ip6tables": false,
             "firewall-backend": "nftables",
-            "data-root": "/opt/docker"
+            "data-root": "/opt/docker",
+              "registry-mirrors": [
+              "https://docker.1ms.run" ,
+              "https://docker.xuanyuan.me" ,
+              "https://docker.m.daocloud.io" ,
+              "https://docker.1panel.live" ,
+              "https://dockerproxy.net"
+            ]
           }
           EOF
           else
@@ -219,7 +226,14 @@ jobs:
           {
             "iptables": false,
             "ip6tables": false,
-            "data-root": "/opt/docker"
+            "data-root": "/opt/docker",
+              "registry-mirrors": [
+              "https://docker.1ms.run" ,
+              "https://docker.xuanyuan.me" ,
+              "https://docker.m.daocloud.io" ,
+              "https://docker.1panel.live" ,
+              "https://dockerproxy.net"
+            ]
           }
           EOF
           fi
