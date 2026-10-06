@@ -783,7 +783,19 @@ jobs:
       - name: Build firmware
         if: ${{ !inputs.config_only }}
         run: |
-          make -j"$(nproc)"
+          echo "开始编译... ($(nproc) 线程)"
+          df -hT /
+  
+          if make -j"$(nproc)"; then
+            echo "多线程编译成功"
+          elif make -j1; then
+            echo "单线程编译成功"
+          elif make -j1 V=s; then
+            echo "单线程详细日志编译成功"
+          else
+            echo "编译失败"
+            exit 1
+          fi
 
       # ============================================================
       # 18. Verify actual firmware manifest
