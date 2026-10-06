@@ -576,10 +576,10 @@ jobs:
           CONFIG_PACKAGE_zoneinfo-asia=y
 
           # ========================================================
-          # OPENCLASH DISABLED
+          # OPENCLASH Enable
           # ========================================================
 
-          # CONFIG_PACKAGE_luci-app-openclash is not set
+          CONFIG_PACKAGE_luci-app-openclash=y
 
           # ========================================================
           # PASSWALL V1 DISABLED
