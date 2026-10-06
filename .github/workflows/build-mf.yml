@@ -156,7 +156,8 @@ jobs:
           set -euo pipefail
 
           ./scripts/feeds update -a
-          # replease the openclash with latest version
+          ./scripts/feeds install -a
+          # replace the openclash with latest version
           rm -rf feeds/luci/applications/luci-app-openclash
           git clone --depth=1 -b dev https://github.com/vernesong/OpenClash.git feeds/luci/applications/luci-app-openclash
           ./scripts/feeds install -a
