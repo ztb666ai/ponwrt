@@ -689,6 +689,7 @@ jobs:
           CONFIG_PACKAGE_bash=y
           # CONFIG_BUSYBOX_CONFIG_UNZIP is not set
           CONFIG_BUSYBOX_CUSTOM=y
+          CONFIG_PACKAGE_luci-compat=y
 
 
           # 让 usb-power(regulator-output) 节点有驱动认领，防止 usb-5v 被
