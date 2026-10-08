@@ -779,8 +779,7 @@ jobs:
           for pkg in \
             luci-app-pon \
             airoha-ponctl \
-            airoha-pond \
-            luci-app-dockerman
+            airoha-pond 
           do
             if ! grep -q "^${pkg} " "$manifest"; then
               echo "ERROR: firmware manifest is missing package: ${pkg}"
