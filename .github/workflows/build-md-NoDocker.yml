@@ -130,8 +130,6 @@ jobs:
             > /tmp/feeds.original
 
           cat > feeds.conf.default <<'EOF'
-          src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main
-          src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git;main
           src-git istore https://github.com/linkease/istore;main
           EOF
           cat /tmp/feeds.original >> feeds.conf.default
@@ -531,8 +529,8 @@ jobs:
           # ISTORE
           # ========================================================
 
-          #CONFIG_PACKAGE_luci-app-store=y
-          #CONFIG_PACKAGE_xz-utils=y
+          CONFIG_PACKAGE_luci-app-store=y
+          CONFIG_PACKAGE_xz-utils=y
 
           # ========================================================
           # WIREGUARD DISABLED (override release.config)
@@ -591,14 +589,14 @@ jobs:
           # CONFIG_PACKAGE_luci-app-dockerman is not set
           CONFIG_PACKAGE_luci-app-iptv=y
           CONFIG_PACKAGE_udpxy=y
-          CONFIG_PACKAGE_acme-acmesh-dnsapi=y
-          CONFIG_PACKAGE_luci-app-acme=y
-          CONFIG_PACKAGE_luci-ssl-openssl=y
-          CONFIG_PACKAGE_luci-app-ddns-go=y
-          CONFIG_PACKAGE_luci-app-uhttpd=y
-          CONFIG_PACKAGE_msmtp=y
-          CONFIG_PACKAGE_msmtp-mta=y
-          CONFIG_PACKAGE_mutt=y
+          #CONFIG_PACKAGE_acme-acmesh-dnsapi=y
+          #CONFIG_PACKAGE_luci-app-acme=y
+          #CONFIG_PACKAGE_luci-ssl-openssl=y
+          #CONFIG_PACKAGE_luci-app-ddns-go=y
+          #CONFIG_PACKAGE_luci-app-uhttpd=y
+          #CONFIG_PACKAGE_msmtp=y
+          #CONFIG_PACKAGE_msmtp-mta=y
+          #CONFIG_PACKAGE_mutt=y
           CONFIG_PACKAGE_vim-fuller=y
           #CONFIG_PACKAGE_luci-app-cloudflared=y
           # ========================================================
