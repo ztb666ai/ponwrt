@@ -1,0 +1,1156 @@
+name: Build XG-040G-MD UBI
+
+on:
+  workflow_dispatch:
+    inputs:
+      config_only:
+        description: "仅验证配置，不编译固件。"
+        required: false
+        default: false
+        type: boolean
+env:
+  TARGET_DEVICE: nokia_xg-040g-md-ubi   # 想编哪个设备，只改这一行
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xg040gmd-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Nokia XG-040G-MD UBI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      # ============================================================
+      # 1. Checkout fork master
+      # ============================================================
+
+      - name: Checkout fork master
+        uses: actions/checkout@v6
+        with:
+          ref: master
+          fetch-depth: 0
+
+      # ============================================================
+      # 2. Sync latest pbs05/ponwrt master before every build
+      # ============================================================
+
+      - name: Sync latest upstream PonWrt
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream https://github.com/pbs05/ponwrt.git
+
+          echo "========== Fetch upstream =========="
+          git fetch upstream master
+
+          echo "========== Latest upstream commit =========="
+          git log -1 --oneline upstream/master
+
+          git checkout master
+          git reset --hard upstream/master
+          git clean -fdx
+
+          echo "========== Sync fork master =========="
+          git push origin HEAD:master --force
+
+          echo "========== Actual build source =========="
+          git log -1 --oneline
+
+      # ============================================================
+      # 3. Free runner space
+      # ============================================================
+
+      - name: Free build space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo apt-get clean
+
+      # ============================================================
+      # 4. Host build dependencies
+      # ============================================================
+
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+
+          sudo apt-get install -y --no-install-recommends \
+            asciidoc autoconf automake autopoint binutils bison build-essential \
+            bzip2 ccache clang cmake cpio curl device-tree-compiler flex gawk \
+            gettext git g++-multilib gcc-multilib gperf help2man intltool \
+            libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev \
+            libmpfr-dev libncurses-dev libpython3-dev libreadline-dev libssl-dev \
+            libtool libyaml-dev lld llvm ninja-build p7zip-full patch pkgconf \
+            python3 python3-docutils python3-pip python3-ply python3-pyelftools \
+            qemu-utils re2c rsync scons squashfs-tools subversion swig texinfo \
+            uglifyjs unzip wget xmlto xxd zlib1g-dev zstd
+
+      # ============================================================
+      # 5. Download cache
+      # ============================================================
+
+      - name: Prepare download cache
+        run: |
+          mkdir -p dl
+
+      - name: Cache downloads
+        uses: actions/cache@v4
+        with:
+          path: dl
+          key: ponwrt-xg040gmd-${{ hashFiles('feeds.conf.default', 'configs/an7581.config', 'configs/release.config') }}
+          restore-keys: |
+            ponwrt-xg040gmd-
+
+      # ============================================================
+      # 6. Third-party feeds
+      # PassWall2 feeds are deliberately placed first
+      # ============================================================
+
+      - name: Configure official PassWall2 and iStore feeds
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grep -vE \
+            '^src-git (passwall_packages|passwall2|istore) ' \
+            feeds.conf.default \
+            > /tmp/feeds.original
+
+          cat > feeds.conf.default <<'EOF'
+          src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main
+          src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git;main
+          src-git istore https://github.com/linkease/istore;main
+          EOF
+          cat /tmp/feeds.original >> feeds.conf.default
+#          echo "========== Feed order =========="
+#          head -n 10 feeds.conf.default
+#        test "$(sed -n '1p' feeds.conf.default)" = \
+#            "src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main"
+#         # test "$(sed -n '2p' feeds.conf.default)" = \
+#            "src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git;main"
+#         # test "$(sed -n '3p' feeds.conf.default)" = \
+#            "src-git istore https://github.com/linkease/istore;main"
+#
+#          echo "Feed priority OK."
+
+      # ============================================================
+      # 7. Update/install feeds
+      # ============================================================
+
+      - name: Update and install feeds
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+      # ============================================================
+      # 7.5 Patch dockerd: drop legacy iptables dependencies
+      # ============================================================
+      - name: Remove legacy iptables dependencies from dockerd
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAKEFILE="feeds/packages/utils/dockerd/Makefile"
+          if [ ! -f "$MAKEFILE" ]; then
+            echo "ERROR: dockerd Makefile not found: $MAKEFILE"; exit 1
+          fi
+          echo "========== DEPENDS (before) =========="
+          sed -n '/define Package\/dockerd$/,/^endef/p' "$MAKEFILE"
+
+          # 1) 整行删除（覆盖 +IPV6: 条件前缀、iptables 全部变体、续行反斜杠）
+          sed -i -E \
+            -e '/^[[:space:]]*\+(IPV6:)?(iptables|ip6tables|iptables-mod-[a-z0-9-]+|ip6tables-mod-[a-z0-9-]+|kmod-ipt-[a-z0-9-]+)[[:space:]]*\\?[[:space:]]*$/d' \
+            "$MAKEFILE"
+          # 2) 兜底：同一行混排多个依赖时逐个剔除
+          sed -i -E \
+            -e 's/\+(IPV6:)?(iptables|ip6tables|iptables-mod-[a-z0-9-]+|ip6tables-mod-[a-z0-9-]+|kmod-ipt-[a-z0-9-]+)([[:space:]]+|$)/ /g' \
+            "$MAKEFILE"
+
+          echo "========== DEPENDS (after) =========="
+          sed -n '/define Package\/dockerd$/,/^endef/p' "$MAKEFILE"
+
+          # 3) 双向校验：iptables 系依赖清零，必要依赖未被误删
+          if grep -Eq '\+(IPV6:)?(iptables|ip6tables|kmod-ipt-)' "$MAKEFILE"; then
+            echo "ERROR: iptables dependencies still present"; exit 1
+          fi
+          for dep in containerd kmod-veth tini uci-firewall kmod-nf-ipvs; do
+            grep -q "+${dep}" "$MAKEFILE" \
+              || { echo "ERROR: ${dep} was accidentally removed"; exit 1; }
+          done
+          echo "dockerd iptables dependencies removed OK."
+
+      # ============================================================
+      # 7.6 dockerd native nftables-only configuration (files overlay)
+      # ============================================================
+      - name: Generate dockerd nftables-only daemon config
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p files/etc/docker files/etc/uci-defaults
+
+          # dockerd >=29 支持 firewall-backend=nftables（原生 nftables 管理规则）
+          # dockerd <29 不支持该 key（会被拒启），降级为仅 iptables:false + fw4 NAT
+          if grep -Eq '^PKG_VERSION:=29\.' \
+               feeds/packages/utils/dockerd/Makefile; then
+            cat > files/etc/docker/daemon.json <<'EOF'
+          {
+            "iptables": false,
+            "ip6tables": false,
+            "firewall-backend": "nftables",
+            "data-root": "/opt/docker",
+              "registry-mirrors": [
+              "https://docker.1ms.run" ,
+              "https://docker.xuanyuan.me" ,
+              "https://docker.m.daocloud.io" ,
+              "https://docker.1panel.live" ,
+              "https://dockerproxy.net"
+            ]
+          }
+          EOF
+          else
+            cat > files/etc/docker/daemon.json <<'EOF'
+          {
+            "iptables": false,
+            "ip6tables": false,
+            "data-root": "/opt/docker",
+              "registry-mirrors": [
+              "https://docker.1ms.run" ,
+              "https://docker.xuanyuan.me" ,
+              "https://docker.m.daocloud.io" ,
+              "https://docker.1panel.live" ,
+              "https://dockerproxy.net"
+            ]
+          }
+          EOF
+          fi
+          cat files/etc/docker/daemon.json
+
+          # init 脚本只认 /tmp/dockerd/daemon.json（由 UCI 生成）。
+          # 设置 alt_config_file 后，init 直接软链我们的文件，
+          # 并跳过 UCI 配置生成与 iptables 规则注入。
+          cat > files/etc/uci-defaults/99-dockerd-nftables <<'EOF'
+          #!/bin/sh
+          [ -f /etc/config/dockerd ] || touch /etc/config/dockerd
+          uci -q get dockerd.globals >/dev/null || uci -q set dockerd.globals=globals
+          uci -q set dockerd.globals.alt_config_file='/etc/docker/daemon.json'
+          uci -q set dockerd.globals.iptables='0'
+          uci -q set dockerd.globals.ip6tables='0'
+          uci -q commit dockerd
+
+          # iptables=false 时 dockerd 不做 NAT，由 fw4 的 docker zone 负责
+          # （预建并开 masq，dockerd init 的 uciadd 检测到已存在不会覆盖）
+          if ! uci -q get firewall.docker >/dev/null; then
+            uci -q add firewall zone >/dev/null
+            uci -q rename firewall.@zone[-1]='docker'
+            uci -q set firewall.docker.name='docker'
+            uci -q set firewall.docker.input='ACCEPT'
+            uci -q set firewall.docker.output='ACCEPT'
+            uci -q set firewall.docker.forward='ACCEPT'
+            uci -q set firewall.docker.masq='1'
+            uci -q add_list firewall.docker.network='docker'
+            uci -q commit firewall
+          fi
+          exit 0
+          EOF
+          chmod +x files/etc/uci-defaults/99-dockerd-nftables
+          echo "daemon.json + uci-defaults generated."
+
+      # ============================================================
+      # 7.7 USB auto-mount to /opt (Docker data-root)
+      # ============================================================
+      - name: Generate USB auto-mount overlay (/opt)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p files/usr/bin files/etc/hotplug.d/block files/etc/uci-defaults
+
+          # ---- 1) 挂载/卸载辅助脚本 ----
+          cat > files/usr/bin/mount-opt <<'EOF'
+          #!/bin/sh
+          # 将第一个未挂载的 USB/SD 分区挂载到 /opt
+          MOUNT_POINT="/opt"
+
+          do_mount() {
+            local dev
+            mkdir -p "$MOUNT_POINT"
+            # /opt 已被占用则不重复挂
+            grep -qs " ${MOUNT_POINT} " /proc/mounts && return 0
+            for dev in /dev/sd[a-z][0-9]* /dev/mmcblk[0-9]p[0-9]*; do
+              [ -b "$dev" ] || continue
+              grep -qs "^${dev} " /proc/mounts && continue
+              logger -t mount-opt "mounting ${dev} -> ${MOUNT_POINT}"
+              mount -o rw,noatime "$dev" "$MOUNT_POINT" && return 0
+            done
+            return 1
+          }
+
+          do_umount() {
+            local dev="${1}"
+            grep -qs "^${dev} ${MOUNT_POINT} " /proc/mounts && umount "$MOUNT_POINT"
+          }
+
+          case "$1" in
+            mount)  do_mount ;;
+            umount) do_umount "$2" ;;
+            *) echo "usage: $0 mount|umount [dev]" ;;
+          esac
+          EOF
+          chmod +x files/usr/bin/mount-opt
+
+          # ---- 2) hotplug: 开机冷插拔 + 运行期热插拔 ----
+          cat > files/etc/hotplug.d/block/40-mount-opt <<'EOF'
+          case "$ACTION" in
+            add)
+              case "$DEVNAME" in
+                sd[a-z][0-9]*|mmcblk[0-9]p[0-9]*)
+                  # 后台执行避免阻塞 hotplug 队列; 等 1s 让设备节点就绪
+                  ( sleep 1; /usr/bin/mount-opt mount ) &
+                  ;;
+              esac
+              ;;
+            remove)
+              case "$DEVNAME" in
+                sd[a-z][0-9]*|mmcblk[0-9]p[0-9]*)
+                  /usr/bin/mount-opt umount "/dev/$DEVNAME"
+                  ;;
+              esac
+              ;;
+          esac
+          EOF
+
+          # ---- 3) 首次开机: 禁用 blockd, 并提前完成挂载 ----
+          cat > files/etc/uci-defaults/99-mount-opt <<'EOF'
+          # blockd 会把 U 盘自动挂到 /mnt/sda1, 与 /opt 冲突, 禁用之
+          [ -x /etc/init.d/blockd ] && /etc/init.d/blockd disable
+
+          mkdir -p /opt
+
+          # S10 时 kmodloader 已加载 usb-storage, 稍等设备枚举后挂载
+          (
+            n=0
+            while [ "$n" -lt 10 ] && ! /usr/bin/mount-opt mount; do
+              sleep 1
+              n=$((n+1))
+            done
+          ) &
+
+          exit 0
+          EOF
+          chmod +x files/etc/uci-defaults/99-mount-opt
+
+          echo "USB auto-mount overlay generated."
+
+      # ============================================================
+      # 7.8 (可选) dockerd 启动前等待 /opt 挂载
+      # ============================================================
+      - name: Make dockerd wait for /opt mount
+        shell: bash
+        run: |
+          set -euo pipefail
+          INIT="feeds/packages/utils/dockerd/files/dockerd.init"
+          test -f "$INIT"
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("feeds/packages/utils/dockerd/files/dockerd.init")
+          s = p.read_text()
+          wait = """start_service() {
+          \t# wait for /opt (USB auto-mount), max 15s; skip if no USB disk
+          \tlocal n=0
+          \twhile [ "$n" -lt 15 ]; do
+          \t\tgrep -qs " /opt " /proc/mounts && break
+          \t\tls /dev/sd*[0-9] >/dev/null 2>&1 || break
+          \t\tsleep 1
+          \t\tn=$((n+1))
+          \tdone
+          """
+          if "wait for /opt" not in s:
+              assert "start_service() {" in s, "anchor not found, upstream changed!"
+              s = s.replace("start_service() {", wait, 1)
+              p.write_text(s)
+          PY
+          grep -n "wait for /opt" "$INIT"
+
+      # ============================================================
+      # 7.9 /etc/sysctl.conf overlay
+      # ============================================================
+      - name: Generate /etc/sysctl.conf
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p files/etc
+          cat > files/etc/sysctl.conf <<'EOF'
+          # User defined entries should be added to this file not to /etc/sysctl.d/* as
+          # that directory is not backed-up by default and will not survive a reimage
+          # ===========================================
+          # XD-040-MD (2GB RAM) + OpenClash
+          # 场景：无Zram / 游戏UDP保活 / 2.5G有线回程
+          # ===========================================
+          #### 1. 内存管理 (无 Zram 安全策略) ####
+          vm.swappiness = 0
+          vm.min_free_kbytes = 131072
+          vm.overcommit_memory = 0
+          vm.dirty_background_ratio = 5
+          vm.dirty_ratio = 10
+          vm.dirty_expire_centisecs = 3000
+          vm.dirty_writeback_centisecs = 500
+          #### 2. 网络核心缓冲区 (2.5G 吞吐优化) ####
+          net.core.rmem_max = 33554432
+          net.core.wmem_max = 33554432
+          net.core.rmem_default = 262144
+          net.core.wmem_default = 262144
+          net.core.netdev_max_backlog = 10000
+          net.core.netdev_budget = 600
+          net.core.somaxconn = 4096
+          #### 3. 游戏 UDP 保活优化 (关键项) ####
+          net.netfilter.nf_conntrack_udp_timeout = 90
+          net.netfilter.nf_conntrack_udp_timeout_stream = 180
+          #### 4. TCP 协议栈优化 ####
+          net.ipv4.tcp_fastopen = 3
+          net.ipv4.tcp_tw_reuse = 1
+          net.ipv4.tcp_fin_timeout = 30
+          net.ipv4.tcp_keepalive_time = 600
+          net.ipv4.tcp_keepalive_intvl = 30
+          net.ipv4.tcp_keepalive_probes = 3
+          net.ipv4.tcp_mem = 786432 1048576 1572864
+          #### 5. 连接追踪表 (NF Conntrack) ####
+          net.netfilter.nf_conntrack_max = 262144
+          net.netfilter.nf_conntrack_tcp_timeout_established = 1200
+          net.netfilter.nf_conntrack_tcp_timeout_time_wait = 30
+          net.netfilter.nf_conntrack_tcp_timeout_close_wait = 60
+          net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 60
+          #### 6. 端口与 ARP ####
+          net.ipv4.ip_local_port_range = 1024 65535
+          net.ipv4.neigh.default.gc_thresh1 = 1024
+          net.ipv4.neigh.default.gc_thresh2 = 4096
+          net.ipv4.neigh.default.gc_thresh3 = 8192
+          #### 7. 文件句柄 ####
+          fs.file-max = 262144
+          # IPTV: 局端只认 IGMPv2
+          net.ipv4.conf.all.force_igmp_version=2
+          net.ipv4.conf.default.force_igmp_version=2
+          # IPTV: 组播源地址无路由，关闭反向路径校验
+          net.ipv4.conf.all.rp_filter=0
+          net.ipv4.conf.default.rp_filter=0
+          EOF
+          cat files/etc/sysctl.conf
+      
+      # ============================================================
+      # 8. Verify package sources
+      # ============================================================
+
+      - name: Verify package sources
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "========== iStore =========="
+          test -f package/feeds/istore/luci-app-store/Makefile
+          echo "iStore source OK."
+
+
+      # ============================================================
+      # 9. Signing key
+      # ============================================================
+
+      - name: Load repository signing key
+        env:
+          PONWRT_APK_PRIVATE_KEY: ${{ secrets.PONWRT_APK_PRIVATE_KEY }}
+        run: |
+          if [ -n "$PONWRT_APK_PRIVATE_KEY" ]; then
+            umask 077
+
+            printf '%s\n' \
+              "$PONWRT_APK_PRIVATE_KEY" \
+              > private-key.pem
+
+            openssl ec \
+              -in private-key.pem \
+              -pubout \
+              -out public-key.pem
+          fi
+      # ============================================================
+      # 10. Default LAN IP + hostname + timezone (UTC+8)
+      # ============================================================
+      - name: Set default LAN IP, hostname and timezone
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import re
+          from pathlib import Path
+
+          path = Path("package/base-files/files/bin/config_generate")
+          s = path.read_text()
+
+          def must_replace(pattern, repl, label):
+                global s
+                s2, n = re.subn(pattern, repl, s, count=1)
+                if n != 1:
+                    raise SystemExit(f"ERROR: config_generate patch failed: {label}")
+                s = s2
+
+          must_replace(
+                r'lan\) ipad=\$\{ipaddr:-"192\.168\.1\.1"\} ;;',
+                'lan) ipad=${ipaddr:-"192.168.2.1"} ;;',
+                "lan ip",
+            )
+          must_replace(
+                r"(set system\.@system\[-1\]\.hostname=)'[^']*'",
+                r"\g<1>'PonWrt'",
+                "hostname",
+            )
+          must_replace(
+                r"(set system\.@system\[-1\]\.timezone=)'[^']*'",
+                r"\g<1>'CST-8'",
+                "timezone",
+            )
+          must_replace(
+                r"(set system\.@system\[-1\]\.zonename=)'[^']*'",
+                r"\g<1>'Asia/Shanghai'",
+                "zonename",
+            )
+
+          path.write_text(s)
+          print("config_generate patched OK")
+          PY
+          grep -n "PonWrt" package/base-files/files/bin/config_generate
+          grep -n "CST-8" package/base-files/files/bin/config_generate
+          grep -n "Asia/Shanghai" package/base-files/files/bin/config_generate
+          grep -n "192.168.2.1" package/base-files/files/bin/config_generate
+      # ============================================================
+      # 10.5 Force China timezone overlay (UTC+8)
+      # ============================================================
+      - name: Generate China timezone uci-defaults overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p files/etc/uci-defaults
+          cat > files/etc/uci-defaults/99-timezone-cn <<'EOF'
+            #!/bin/sh
+            # Force China timezone (UTC+8) on every flash / keep-settings upgrade
+            [ -s /etc/config/system ] || exit 0
+            uci -q set system.@system[0].zonename='Asia/Shanghai'
+            uci -q set system.@system[0].timezone='CST-8'
+            uci -q commit system
+            exit 0
+          EOF
+          chmod +x files/etc/uci-defaults/99-timezone-cn
+          echo "========== 99-timezone-cn =========="
+          cat files/etc/uci-defaults/99-timezone-cn
+      
+      # ============================================================
+      # 10.6 Runtime kernel patches（不改 git 源，构建时动态打补丁）
+      #  P1: LWN crypto 动态软件回退 + EIP93（4 个内核补丁，Linux 6.18）
+      #  P2: OpenWrt c46bef18 桥接 flow 软转发修复（pending-6.18 单文件）
+      # 两者都在内核 prepare 阶段由 quilt 自动应用，无需 commit。
+      # 幂等：已存在/已应用则跳过。
+      # ============================================================
+      - name: Apply kernel patches (EIP93 fallback + bridge flow fix)
+        shell: bash
+        run: |
+          set -euo pipefail
+          KV=$(sed -n 's/^KERNEL_PATCHVER:=//p' target/linux/airoha/Makefile)
+          echo "KERNEL_PATCHVER = ${KV}"
+          [ "${KV}" = "6.18" ] || { echo "ERROR: 两个补丁都基于 Linux 6.18，当前树是 ${KV}"; exit 1; }
+
+          # ---------- P1: LWN 系列 ----------
+          # t.mbox.gz 是整个线程（含回复），不能按 0001=cover 硬切。
+          # b4 am 只输出真正的补丁邮件（剔除 cover/Re:/ACK），自动取最新版本，顺序正确。
+          #AIRD=target/linux/airoha/patches-${KV}
+          #if ! compgen -G "${AIRD}/999-*-crypto-dynamic-fallback*.patch" >/dev/null; then
+          #  sudo apt-get install -y -qq b4
+          #  rm -rf /tmp/lwn && mkdir -p "${AIRD}" /tmp/lwn
+
+          #  b4 am -T -o /tmp/lwn -n series \
+          #    'https://lore.kernel.org/linux-crypto/cover.1785226804.git.hurryman2212@gmail.com/'
+
+           # mbx=$(find /tmp/lwn -maxdepth 1 -type f -name '*.mbx' -print -quit)
+           # [ -n "$mbx" ] || { echo "ERROR: b4 未产出补丁 mbox"; exit 1; }
+           # echo "b4 mbox: ${mbx}"
+
+           # rm -rf /tmp/lwn/msg
+           # mkdir -p /tmp/lwn/msg  # git mailsplit 不会自动创建输出目录，必须先 mkdir
+           #git mailsplit -o/tmp/lwn/msg "$mbx" >/dev/null
+
+           # n=0
+           # for f in /tmp/lwn/msg/0*; do
+           #   n=$((n+1))
+           #   cp -v "$f" "${AIRD}/999-$(printf '%02d' $n)-crypto-dynamic-fallback.patch"
+           # done
+           # [ "${n}" -eq 4 ] || { echo "ERROR: 期望 4 个补丁，实际 ${n} 个"; exit 1; }
+          #fi
+          #ls -l "${AIRD}"/999-*.patch
+          #head -n4 "${AIRD}"/999-01-*.patch        # 日志确认 Subject
+
+          # ---------- P2: OpenWrt master commit（固定 sha，可复现） ----------
+          P2=target/linux/generic/pending-${KV}/675-15-netfilter-fix-bridge-flow-software-forwarding.patch
+          if ! grep -rqs 'netfilter: make bridge flow offload preserve L2 forwarding' \
+                target/linux/generic/pending-${KV}/ ; then     # 查重：上游已收编则跳过
+            mkdir -p "$(dirname "${P2}")"
+            curl -fsSL --retry 3 \
+              'https://raw.githubusercontent.com/openwrt/openwrt/c46bef18699833af759b6b7f71879ed8c23852c1/target/linux/generic/pending-6.18/675-15-netfilter-fix-bridge-flow-software-forwarding.patch' \
+              -o "${P2}"
+          fi
+          head -n6 "${P2}"
+
+          # ---------- 可选：内核侧使能 fallback 框架 ----------
+          CFG=target/linux/airoha/config-${KV}
+          grep -qs '^CONFIG_CRYPTO_DYNAMIC_FALLBACK=y' "${CFG}" || {
+            echo 'CONFIG_CRYPTO_DYNAMIC_FALLBACK=y' >> "${CFG}"
+            echo "appended CONFIG_CRYPTO_DYNAMIC_FALLBACK=y"
+          }
+          echo "Kernel patches prepared."
+
+      # ============================================================
+      # 12. Custom configuration
+      # ============================================================
+
+      - name: Create XG-040G-MD custom config
+        run: |
+          cat > /tmp/xg040gmd.config <<'EOF'
+
+          # ========================================================
+          # DEVICE - Nokia XG-040G-MD UBI ONLY
+          # ========================================================
+
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_airoha_an7581-evb is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_airoha_an7581-evb-emmc-eagle is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_airoha_an7581-evb-emmc-kite is not set
+
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_gemtek_w1700k-ubi is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_gemtek_xg2010g is not set
+
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_valyrian is not set
+
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5382a is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-ct is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-cu is not set
+
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-tf-ubi is not set
+
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_unionman_ung00a is not set
+
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_znxt_zn504xg-d is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_znxt_zn515xg-d is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_quantum_q1000k-ubi is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-ct-usb-sfp is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_fiberhome_hg5585f-cu-usb-sfp is not set
+          # CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi-usb-sfp is not set
+
+          CONFIG_TARGET_DEVICE_airoha_an7581_DEVICE_nokia_xg-040g-md-ubi=y
+          # ========================================================
+          # TIMEZONE - zoneinfo database (Asia/Shanghai for LuCI/apps)
+          # ========================================================
+          CONFIG_PACKAGE_zoneinfo-asia=y
+
+          # ========================================================
+          # OPENCLASH DISABLED
+          # ========================================================
+
+          # CONFIG_PACKAGE_luci-app-openclash is not set
+
+          # ========================================================
+          # PASSWALL V1 DISABLED
+          # ========================================================
+
+          # CONFIG_PACKAGE_luci-app-passwall is not set
+
+          # ========================================================
+          # ISTORE
+          # ========================================================
+
+          #CONFIG_PACKAGE_luci-app-store=y
+          #CONFIG_PACKAGE_xz-utils=y
+
+          # ========================================================
+          # WIREGUARD DISABLED (override release.config)
+          # ========================================================
+
+          # CONFIG_PACKAGE_kmod-wireguard=y #keep kmod
+          # CONFIG_PACKAGE_wireguard-tools is not set
+          # CONFIG_PACKAGE_luci-proto-wireguard is not set
+
+          # ========================================================
+          # PASSWALL2 - SingBox only + nftables
+          # ========================================================
+
+          #CONFIG_PACKAGE_luci-app-passwall2=y
+          #CONFIG_PACKAGE_luci-i18n-passwall2-zh-cn=y
+
+          # Basic core
+
+          # CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_Xray is not set
+          #CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_SingBox=y
+          # CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_All is not set
+
+          # Transparent proxy
+
+          # CONFIG_PACKAGE_luci-app-passwall2_Iptables_Transparent_Proxy is not set
+          #CONFIG_PACKAGE_luci-app-passwall2_Nftables_Transparent_Proxy=y
+
+          # Disable optional heavy / legacy components
+
+          # CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Haproxy is not set
+
+          # CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Shadowsocks_Rust_Client is not set
+          # CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Shadowsocks_Rust_Server is not set
+
+          # CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_ShadowsocksR_Libev_Client is not set
+          # CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_ShadowsocksR_Libev_Server is not set
+
+          # CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Simple_Obfs is not set
+          # CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_V2ray_Plugin is not set
+          
+          # ========================================================
+          # Others DISABLED (override release.conf)
+          # 三层合并顺序是 kconfig.pl + an7583.config + release.config /tmp/xg040gmf.config，heredoc 最后写入
+          # 规范格式的禁用行如下：# 后必须有空格：# CONFIG_X is not set 是 kconfig 的合法“显式关闭”行
+          # ========================================================
+          # CONFIG_PACKAGE_luci-app-upnp is not set
+          # CONFIG_PACKAGE_miniupnpd is not set
+
+          # ========================================================
+          # add-on apps
+          # ========================================================
+
+          CONFIG_PACKAGE_docker=y 
+          CONFIG_PACKAGE_docker-compose=y
+          CONFIG_PACKAGE_dockerd=y
+          CONFIG_PACKAGE_luci-app-dockerman=y
+          CONFIG_PACKAGE_luci-app-iptv=y
+          CONFIG_PACKAGE_udpxy=y
+          CONFIG_PACKAGE_acme-acmesh-dnsapi=y
+          CONFIG_PACKAGE_luci-app-acme=y
+          CONFIG_PACKAGE_luci-ssl-openssl=y
+          CONFIG_PACKAGE_luci-app-ddns-go=y
+          CONFIG_PACKAGE_luci-app-uhttpd=y
+          CONFIG_PACKAGE_msmtp=y
+          CONFIG_PACKAGE_msmtp-mta=y
+          CONFIG_PACKAGE_mutt=y
+          CONFIG_PACKAGE_vim-fuller=y
+          CONFIG_PACKAGE_luci-app-cloudflared=y
+          # ========================================================
+          # CRITICAL DRIVERS -> =y (2.5G 网口 + USB 自动挂载)
+          # 上游 release.config 把这些设成 m（不进固件），显式 =y 覆盖之
+          # 依赖包（libphy/of-mdio/nls 等）由 make defconfig 自动补齐
+          # ========================================================
+          CONFIG_PACKAGE_kmod-airoha-en7572=y
+          CONFIG_PACKAGE_kmod-phy-airoha-en8811h=y
+          CONFIG_PACKAGE_airoha-en8811h-firmware=y
+          CONFIG_PACKAGE_block-mount=y
+          CONFIG_PACKAGE_kmod-usb-core=y
+          CONFIG_PACKAGE_kmod-usb-common=y
+          CONFIG_PACKAGE_kmod-usb-xhci-hcd=y
+          CONFIG_PACKAGE_kmod-usb3=y
+          CONFIG_PACKAGE_kmod-usb-storage=y
+          CONFIG_PACKAGE_kmod-usb-storage-uas=y
+          CONFIG_PACKAGE_kmod-scsi-core=y
+          CONFIG_PACKAGE_kmod-fs-ext4=y
+          CONFIG_PACKAGE_kmod-fs-vfat=y
+          CONFIG_PACKAGE_kmod-fs-exfat=y
+          CONFIG_PACKAGE_kmod-nls-base=y
+          CONFIG_PACKAGE_kmod-nls-cp437=y
+          CONFIG_PACKAGE_kmod-nls-iso8859-1=y
+          CONFIG_PACKAGE_kmod-nls-utf8=y
+          CONFIG_PACKAGE_kmod-phy-maxlinear=y
+          CONFIG_PACKAGE_kmod-phy-realtek=y
+          CONFIG_PACKAGE_kmod-crypto-hw-eip93=y
+          CONFIG_PACKAGE_curl=y
+          CONFIG_PACKAGE_kmod-nft-queue=y
+          CONFIG_PACKAGE_curl=y
+          CONFIG_PACKAGE_bash=y
+          # CONFIG_BUSYBOX_CONFIG_UNZIP is not set
+          CONFIG_BUSYBOX_CUSTOM=y
+
+          # 让 usb-power(regulator-output) 节点有驱动认领，防止 usb-5v 被
+          # regulator late-cleanup 关闭（与 MD 行为完全一致）
+          CONFIG_PACKAGE_kmod-regulator-userspace-consumer=y
+          # APK 仓库基址改为 NJU 镜像（distfeeds.list 的 %U 占位符来源）
+          #CONFIG_VERSION_REPO="https://mirror.nju.edu.cn/immortalwrt/snapshots"
+          
+          # ========================================================
+          # disable some apps, not just add# but with the format
+          # CONFIG_PACKAGE_xxx is not set
+          # ========================================================
+          # CONFIG_LUCI_LANG_zh_Hans is not set
+          # 只保留系统级中文（菜单、框架字符串），app 全部英文
+          # CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+          # 需要哪个 app 的中文就显式加哪个，例如：
+          # CONFIG_PACKAGE_luci-i18n-iptv-zh-cn=y
+          # CONFIG_PACKAGE_luci-i18n-acme-zh-cn is not set
+          # CONFIG_PACKAGE_luci-i18n-cloudflared-zh-cn is not set
+          # CONFIG_PACKAGE_luci-i18n-ddns-go-zh-cn is not set
+          # CONFIG_PACKAGE_luci-i18n-firewall-zh-cn is not set
+          # CONFIG_PACKAGE_luci-i18n-iptv-zh-cn is not set
+          # CONFIG_PACKAGE_luci-i18n-package-manager-zh-cn is not set
+          # CONFIG_PACKAGE_luci-i18n-pon-zh-cn is not set
+          # CONFIG_PACKAGE_luci-i18n-uhttpd-zh-cn is not set
+          # CONFIG_PACKAGE_luci-theme-bootstrap is not set
+      
+          EOF
+
+      # ============================================================
+      # 13. Merge configuration
+      # ============================================================
+
+      - name: Configure XG-040G-MD
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          # change the default theme:
+          sed -i 's/+luci-theme-bootstrap/+luci-theme-argon/g; s/default Bootstrap theme/Argon theme/g' feeds/luci/collections/luci-light/Makefile
+          ./scripts/kconfig.pl + \
+            configs/an7581.config \
+            + \
+            configs/release.config \
+            /tmp/xg040gmd.config \
+            > .config
+          make defconfig
+      # ============================================================
+      # 14. Whitelist device， compile specified device
+      # ============================================================
+      - name: Whitelist device (${{ env.TARGET_DEVICE }})
+        env:
+          DEVICE: ${{ env.TARGET_DEVICE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "$DEVICE" ] || { echo "ERROR: TARGET_DEVICE is empty"; exit 1; }
+          DEV_ESC=$(printf '%s' "$DEVICE" | sed -e 's/[^A-Za-z0-9_-]/\\&/g')
+          sed -i -E 's/^(CONFIG_TARGET_[A-Za-z0-9_]+_DEVICE_[A-Za-z0-9_.-]+)=y$/# \1 is not set/' .config
+          grep -qE "^# CONFIG_TARGET_[A-Za-z0-9_]+_DEVICE_${DEV_ESC} is not set$" .config || { echo "ERROR: device symbol for ${DEVICE} not found in .config"; exit 1; }
+          sed -i -E "s/^# (CONFIG_TARGET_[A-Za-z0-9_]+_DEVICE_${DEV_ESC}) is not set$/\1=y/" .config
+          make defconfig
+          remaining=$(grep -cE '^CONFIG_TARGET_[A-Za-z0-9_]+_DEVICE_[A-Za-z0-9_.-]+=y$' .config || true)
+          [ "$remaining" -eq 1 ] || { echo "ERROR: expect exactly 1 DEVICE=y, got ${remaining}"; exit 1; }
+          grep -E "^CONFIG_TARGET_[A-Za-z0-9_]+_DEVICE_${DEV_ESC}=y$" .config
+          echo "Whitelist OK: only ${DEVICE} enabled."
+      
+      # ============================================================
+      # 15. Config-only test mode
+      # ============================================================
+
+      - name: Upload build config
+        if: ${{ inputs.config_only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: xg040gmd-build-config
+          path: .config
+          include-hidden-files: true
+          retention-days: 7
+
+      # ============================================================
+      # 16. Download sources
+      # ============================================================
+
+      - name: Download sources
+        if: ${{ !inputs.config_only }}
+        run: |
+          make download -j"$(nproc)"
+
+      # ============================================================
+      # 17. Build
+      # ============================================================
+
+      - name: Build firmware
+        if: ${{ !inputs.config_only }}
+        run: |
+          echo "开始编译... ($(nproc) 线程)"
+          df -hT /
+  
+          if make -j"$(nproc)"; then
+            echo "多线程编译成功"
+          elif make -j1; then
+            echo "单线程编译成功"
+          elif make -j1 V=s; then
+            echo "单线程详细日志编译成功"
+          else
+            echo "编译失败"
+            exit 1
+          fi
+
+      # ============================================================
+      # 18. Verify actual firmware manifest
+      # ============================================================
+
+      - name: Verify firmware package manifest
+        if: ${{ !inputs.config_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          target_dir="bin/targets/airoha/an7581"
+
+          echo "========== Target output =========="
+          ls -lah "$target_dir"
+
+          mapfile -t manifests < <(
+            find "$target_dir" \
+              -maxdepth 1 \
+              -type f \
+              -name '*.manifest' \
+              -print
+          )
+
+          if [ "${#manifests[@]}" -ne 1 ]; then
+            echo "ERROR: expected exactly one device manifest."
+            echo "Found ${#manifests[@]}."
+            printf '%s\n' "${manifests[@]}"
+            exit 1
+          fi
+
+          manifest="${manifests[0]}"
+
+          echo "========== Manifest =========="
+          echo "$manifest"
+
+          for pkg in \
+            luci-app-pon \
+            airoha-ponctl \
+            airoha-pond \
+            luci-app-dockerman
+          do
+            if ! grep -q "^${pkg} " "$manifest"; then
+              echo "ERROR: firmware manifest is missing package: ${pkg}"
+              exit 1
+            fi
+          done
+
+          #if grep -q '^luci-app-openclash ' "$manifest"; then
+          #  echo "ERROR: OpenClash unexpectedly exists in firmware."
+          #  exit 1
+          #fi
+
+          echo "Actual firmware package manifest OK."
+
+      # ============================================================
+      # 19. Collect exactly one sysupgrade.itb
+      # ============================================================
+
+      - name: Collect XG-040G-MD firmware
+        if: ${{ !inputs.config_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf release
+          mkdir -p release
+
+          target_dir="bin/targets/airoha/an7581"
+
+          mapfile -t firmware_files < <(
+            find "$target_dir" \
+              -maxdepth 1 \
+              -type f \
+              -name '*sysupgrade.itb' \
+              -print
+          )
+
+          echo "========== sysupgrade.itb candidates =========="
+          printf '%s\n' "${firmware_files[@]}"
+
+          if [ "${#firmware_files[@]}" -ne 1 ]; then
+            echo "ERROR: expected exactly one sysupgrade.itb."
+            echo "Found ${#firmware_files[@]}."
+            exit 1
+          fi
+
+          firmware="${firmware_files[0]}"
+
+          if [ ! -s "$firmware" ]; then
+            echo "ERROR: firmware is empty."
+            exit 1
+          fi
+
+          cp -v "$firmware" release/
+
+          # ---- 2) manifest ----
+          mapfile -t manifests < <(
+            find "$target_dir" \
+              -maxdepth 1 \
+              -type f \
+              -name '*.manifest' \
+              -print
+          )
+          if [ "${#manifests[@]}" -ne 1 ]; then
+              echo "ERROR: expected exactly one manifest."
+              echo "Found ${#manifests[@]}."
+          fi
+          cp -v "${manifests[0]}" release/
+
+          # ---- 3) final .config (post defconfig + whitelist) ----
+          if [ ! -s .config ]; then
+            echo "ERROR: .config not found."
+          #  exit 1
+           fi
+           cp -v .config release/xg040gmd.config
+
+           echo "========== release/ =========="
+           ls -lh release/
+
+      # ============================================================
+      # 20. Final firmware validation
+      # ============================================================
+
+      - name: Verify final firmware
+        if: ${{ !inputs.config_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t final_files < <(
+            find release \
+              -maxdepth 1 \
+              -type f \
+              -name '*sysupgrade.itb' \
+              -print
+          )
+
+          if [ "${#final_files[@]}" -ne 1 ]; then
+            echo "ERROR: release directory must contain exactly one ITB."
+            exit 1
+          fi
+
+          firmware="${final_files[0]}"
+
+          test -s "$firmware"
+
+          echo "========== Final firmware =========="
+          ls -lh "$firmware"
+
+          echo "========== SHA256 =========="
+          sha256sum "$firmware"
+
+      # ============================================================
+      # 21. Publish ITB + manifest + config to GitHub Release
+      # ============================================================
+      - name: Publish artifacts to GitHub Release
+        if: ${{ !inputs.config_only }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mapfile -t release_files < <(
+            find release \
+              -maxdepth 1 \
+              -type f \
+              \( -name '*sysupgrade.itb' \
+              -o -name '*.manifest' \
+              -o -name '*.config' \) \
+              -print | sort
+          )
+          if [ "${#release_files[@]}" -ne 3 ]; then
+             echo "ERROR: expected exactly 3 artifacts (itb + manifest + config)."
+             echo "Found ${#release_files[@]}:"
+             printf '%s\n' "${release_files[@]}"
+             exit 1
+          fi
+
+          for f in "${release_files[@]}"; do
+            test -s "$f" || { echo "ERROR: $f is empty"; exit 1; }
+          done
+
+          firmware="$(find release -maxdepth 1 -type f -name '*sysupgrade.itb')"
+          manifest="$(find release -maxdepth 1 -type f -name '*.manifest')"
+          config="release/xg040gmd.config"
+
+          source_sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=8 HEAD)"
+          release_tag="xg040gmd-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}-${short_sha}"
+
+          firmware_sha256="$(sha256sum "$firmware" | awk '{print $1}')"
+          manifest_sha256="$(sha256sum "$manifest" | awk '{print $1}')"
+          config_sha256="$(sha256sum "$config" | awk '{print $1}')"
+
+          echo "========== Release =========="
+          echo "Tag: ${release_tag}"
+          echo "Source: ${source_sha}"
+          for f in "${release_files[@]}"; do
+            echo "Asset: ${f}"
+          done
+
+          gh release create \
+             "${release_tag}" \
+             "${firmware}" \
+             "${manifest}" \
+             "${config}" \
+             --repo "${GITHUB_REPOSITORY}" \
+             --target "${source_sha}" \
+             --title "Nokia XG-040G-MD ${short_sha}" \
+             --notes "Nokia XG-040G-MD UBI sysupgrade firmware.
+
+          Default LAN IP: 192.168.2.1
+          Default hostname: PonWrt
+          Timezone: Asia/Shanghai (UTC+8)
+          Proxy: nftables
+          Docker: Included
+
+          SHA256:
+          \`\`\`
+          ${firmware_sha256}  $(basename "$firmware")
+          ${manifest_sha256}  $(basename "$manifest")
+          ${config_sha256}  $(basename "$config")
+          \`\`\`
+
+          Source commit: ${source_sha}" \
+            --prerelease
+
+      # ============================================================
+      # 22. Verify published Release
+      # ============================================================
+      - name: Verify published Release
+        if: ${{ !inputs.config_only }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          short_sha="$(git rev-parse --short=8 HEAD)"
+          release_tag="xg040gmd-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}-${short_sha}"
+          mapfile -t assets < <(
+            gh release view "${release_tag}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --json assets \
+              --jq '.assets[].name'
+          )
+
+          echo "========== Assets =========="
+          printf '%s\n' "${assets[@]}"
+           if [ "${#assets[@]}" -ne 3 ]; then
+            echo "ERROR: Release must contain exactly 3 assets."
+            echo "Found: ${#assets[@]}"
+            exit 1
+          fi
+
+          has_itb=0; has_manifest=0; has_config=0
+          for name in "${assets[@]}"; do
+            case "${name}" in
+              *sysupgrade.itb) has_itb=1 ;;
+              *.manifest)      has_manifest=1 ;;
+              *.config)        has_config=1 ;;
+              *) echo "ERROR: unexpected asset: ${name}"; exit 1 ;;
+            esac
+          done
+          [ "$has_itb" -eq 1 ]      || { echo "ERROR: missing itb"; exit 1; }
+          [ "$has_manifest" -eq 1 ] || { echo "ERROR: missing manifest"; exit 1; }
+          [ "$has_config" -eq 1 ]   || { echo "ERROR: missing config"; exit 1; }
+          echo "=========================================="
+          echo "BUILD SUCCESS"
+          echo "Assets: itb + manifest + config"
+          echo "=========================================="
