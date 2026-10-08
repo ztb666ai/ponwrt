@@ -955,7 +955,7 @@ jobs:
           Default hostname: PonWrt
           Timezone: Asia/Shanghai (UTC+8)
           Proxy: nftables
-          Docker: Included
+          Docker: N/A
 
           SHA256:
           \`\`\`
