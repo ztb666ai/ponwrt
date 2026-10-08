@@ -687,6 +687,7 @@ jobs:
           CONFIG_PACKAGE_kmod-veth=y
           CONFIG_PACKAGE_curl=y
           CONFIG_PACKAGE_bash=y
+          CONFIG_PACKAGE_htop=y
           # CONFIG_BUSYBOX_CONFIG_UNZIP is not set
           CONFIG_BUSYBOX_CUSTOM=y
           CONFIG_PACKAGE_luci-compat=y #for openclash
