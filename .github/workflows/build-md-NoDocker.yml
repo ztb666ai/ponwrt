@@ -529,8 +529,8 @@ jobs:
           # ISTORE
           # ========================================================
 
-          CONFIG_PACKAGE_luci-app-store=y
-          CONFIG_PACKAGE_xz-utils=y
+          #CONFIG_PACKAGE_luci-app-store=y
+          #CONFIG_PACKAGE_xz-utils=y
 
           # ========================================================
           # WIREGUARD DISABLED (override release.config)
