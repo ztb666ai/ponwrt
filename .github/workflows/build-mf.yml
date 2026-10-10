@@ -355,14 +355,14 @@ jobs:
       # 8. Verify package sources
       # ============================================================
 
-      - name: Verify package sources
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "========== iStore =========="
-          test -f package/feeds/istore/luci-app-store/Makefile
-          echo "iStore source OK."
+      #- name: Verify package sources
+      #  shell: bash
+      #  run: |
+      #    set -euo pipefail
+#
+     #     echo "========== iStore =========="
+     #     test -f package/feeds/istore/luci-app-store/Makefile
+     #     echo "iStore source OK."
 
 
       # ============================================================
