@@ -1,4 +1,4 @@
-name: Build XG-040G-MF NoOC UBI
+name: Build XG-040G-MF-NoOC-UBI
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build Nokia XG-040G-MF NoOC UBI
+    name: Build Nokia XG-040G-MF-NoOC-UBI
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
