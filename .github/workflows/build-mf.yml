@@ -255,7 +255,7 @@ jobs:
           cat > files/etc/sysctl.conf <<'EOF'
           # ===========================================
           # ===========================================
-          # XD-040-MF (AN7583 双核AES / 512MB / 无Zram) + OpenClash
+          # XD-040-MF (AN7583 双核AES / 512MB / 无Zram) + 
           # 场景：游戏 UDP 保活 / 2.5G 有线回程 / IPTV / 内存敏感型调优
           # ===========================================
           
@@ -311,7 +311,7 @@ jobs:
           # net.ipv4.tcp_congestion_control = bbr
           # net.core.default_qdisc = fq
           
-          #### 5. UDP 协议栈水位 (★ 新增，游戏/OpenClash UDP 关键) ####
+          #### 5. UDP 协议栈水位 (★ 新增，游戏/ UDP 关键) ####
           # 单位：页(4KB)，32/48/64MB，与 tcp_mem 对齐
           net.ipv4.udp_mem = 8192 12288 16384
           net.ipv4.udp_rmem_min = 16384
@@ -1061,7 +1061,7 @@ jobs:
           Default LAN IP: 192.168.2.1
           Default hostname: PonWrt
           Timezone: Asia/Shanghai (UTC+8)
-          Proxy: nftables
+          Proxy: nftables with openclash
           Docker: N/A
 
           SHA256:
