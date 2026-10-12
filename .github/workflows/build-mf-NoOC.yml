@@ -1,4 +1,4 @@
-name: Build XG-040G-MF-NoOC-UBI
+name: Build XG-040G-MF-NO-OC UBI
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build Nokia XG-040G-MF-NoOC-UBI
+    name: Build Nokia XG-040G-MF-NO-OC UBI
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
@@ -579,7 +579,7 @@ jobs:
           # OPENCLASH Enable
           # ========================================================
 
-          # CONFIG_PACKAGE_luci-app-openclash=y
+          #CONFIG_PACKAGE_luci-app-openclash is not set
 
           # ========================================================
           # PASSWALL V1 DISABLED
@@ -702,11 +702,11 @@ jobs:
           # disable some apps, not just add# but with the format
           # CONFIG_PACKAGE_xxx is not set
           # ========================================================
-          # CONFIG_LUCI_LANG_zh_Hans=y
+          # CONFIG_LUCI_LANG_zh_Hans is not set
           # 只保留系统级中文（菜单、框架字符串），app 全部英文
-          # CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
           # 需要哪个 app 的中文就显式加哪个，例如：
-          # CONFIG_PACKAGE_luci-i18n-iptv-zh-cn=y
+          # CONFIG_PACKAGE_luci-i18n-iptv-zh-cn is not set
           # CONFIG_PACKAGE_luci-i18n-acme-zh-cn is not set
           # CONFIG_PACKAGE_luci-i18n-cloudflared-zh-cn is not set
           # CONFIG_PACKAGE_luci-i18n-ddns-go-zh-cn is not set
