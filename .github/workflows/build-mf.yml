@@ -736,6 +736,9 @@ jobs:
             configs/release.config \
             /tmp/xg040gmf.config \
             > .config
+          sed -i '/^CONFIG_LUCI_LANG_zh_Hans=/d' .config
+          sed -i '/^# CONFIG_LUCI_LANG_zh_Hans is not set$/d' .config
+          echo "# CONFIG_LUCI_LANG_zh_Hans is not set" >> .config   # 注意 # 后面的空格！
           make defconfig
       # ============================================================
       # 14. Whitelist device， compile specified device
